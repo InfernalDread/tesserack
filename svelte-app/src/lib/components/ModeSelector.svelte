@@ -33,11 +33,15 @@
     $: isRunning = $activeMode !== 'idle';
     $: isPaused = $activeMode === 'idle';
 
-    // Progress calculation
+    // Progress calculation - use the trainer's next threshold
     const thresholds = [3000, 7000, 15000, 30000, 60000, 100000];
-    $: currentThreshold = thresholds.find(t => t > $stats.experiences) || 100000;
-    $: prevThreshold = thresholds[thresholds.indexOf(currentThreshold) - 1] || 0;
-    $: progress = Math.min(100, (($stats.experiences - prevThreshold) / (currentThreshold - prevThreshold)) * 100);
+    $: nextAutoTrain = $modelState.nextAutoTrain || 3000;
+    $: currentThreshold = typeof nextAutoTrain === 'number' ? nextAutoTrain : 100000;
+    $: thresholdIndex = thresholds.indexOf(currentThreshold);
+    $: prevThreshold = thresholdIndex > 0 ? thresholds[thresholdIndex - 1] : 0;
+    $: progress = currentThreshold > prevThreshold
+        ? Math.min(100, Math.max(0, (($stats.experiences - prevThreshold) / (currentThreshold - prevThreshold)) * 100))
+        : 100;
     $: level = $modelState.sessions || 0;
     $: isTraining = $trainingProgress.active;
 </script>

@@ -294,9 +294,14 @@ export class BrowserTrainer {
             this.trainingSessions++;
             this.totalEpochsTrained += epochs;
 
+            // Save updated metadata immediately
+            this.saveMetadata();
+
             const duration = (Date.now() - startTime) / 1000;
             const finalLoss = history.history.loss[history.history.loss.length - 1];
             const finalAcc = history.history.acc[history.history.acc.length - 1];
+
+            console.log(`Training complete: sessions=${this.trainingSessions}, loss=${finalLoss.toFixed(4)}, acc=${(finalAcc * 100).toFixed(1)}%`);
 
             this.onProgress({
                 stage: 'complete',
@@ -399,6 +404,7 @@ export class BrowserTrainer {
             localStorage.setItem(`${this.modelStorageKey}-meta`, JSON.stringify({
                 trainingSessions: this.trainingSessions,
                 totalEpochsTrained: this.totalEpochsTrained,
+                nextThresholdIndex: this.nextThresholdIndex,
                 savedAt: Date.now(),
                 config: this.config
             }));
@@ -415,6 +421,9 @@ export class BrowserTrainer {
      * Load model from IndexedDB
      */
     async loadModel() {
+        // Always try to load metadata first (even if model doesn't exist)
+        this.loadMetadata();
+
         try {
             if (!this.tfLoaded) {
                 const loaded = await this.loadTensorFlow();
@@ -423,19 +432,29 @@ export class BrowserTrainer {
 
             this.model = await tf.loadLayersModel(`indexeddb://${this.modelStorageKey}`);
 
-            // Load metadata
+            console.log(`Model loaded from IndexedDB (sessions: ${this.trainingSessions}, nextThreshold: ${this.trainingThresholds[this.nextThresholdIndex]})`);
+            return true;
+        } catch (e) {
+            console.log('No saved model found (this is normal for first run)');
+            return false;
+        }
+    }
+
+    /**
+     * Load metadata from localStorage
+     */
+    loadMetadata() {
+        try {
             const metaStr = localStorage.getItem(`${this.modelStorageKey}-meta`);
             if (metaStr) {
                 const meta = JSON.parse(metaStr);
                 this.trainingSessions = meta.trainingSessions || 0;
                 this.totalEpochsTrained = meta.totalEpochsTrained || 0;
+                this.nextThresholdIndex = meta.nextThresholdIndex || 0;
+                console.log(`Loaded training metadata: sessions=${this.trainingSessions}, nextThresholdIndex=${this.nextThresholdIndex}`);
             }
-
-            console.log('Model loaded from IndexedDB');
-            return true;
         } catch (e) {
-            console.log('No saved model found (this is normal for first run)');
-            return false;
+            console.warn('Failed to load training metadata:', e);
         }
     }
 
@@ -455,6 +474,21 @@ export class BrowserTrainer {
      */
     markAutoTrainComplete() {
         this.nextThresholdIndex++;
+        // Persist the updated threshold index
+        this.saveMetadata();
+    }
+
+    /**
+     * Save metadata to localStorage (without full model save)
+     */
+    saveMetadata() {
+        localStorage.setItem(`${this.modelStorageKey}-meta`, JSON.stringify({
+            trainingSessions: this.trainingSessions,
+            totalEpochsTrained: this.totalEpochsTrained,
+            nextThresholdIndex: this.nextThresholdIndex,
+            savedAt: Date.now(),
+            config: this.config
+        }));
     }
 
     /**

@@ -230,6 +230,15 @@ export class AutoTrainingManager {
         this.checkInterval = null;
         this.lastCheckCount = 0;
         this.isMonitoring = false;
+        this.enabled = true; // Can be toggled by UI
+    }
+
+    /**
+     * Set whether auto-training is enabled
+     */
+    setEnabled(enabled) {
+        this.enabled = enabled;
+        console.log('Auto-training enabled:', enabled);
     }
 
     /**
@@ -260,6 +269,7 @@ export class AutoTrainingManager {
      */
     async check() {
         if (!this.buffer || !this.policy) return;
+        if (!this.enabled) return; // Respect the enabled toggle
 
         const experiences = this.buffer.buffer || [];
         const count = experiences.length;

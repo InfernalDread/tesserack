@@ -35,6 +35,7 @@ import {
     autoTrainer as autoTrainerStore,
     modelState,
     trainingProgress,
+    autoTrainEnabled,
     updateModelState,
     updateTrainingProgress
 } from '$lib/stores/training';
@@ -210,6 +211,13 @@ export async function initializeGame(romBuffer, gameCanvas) {
         );
         autoTrainerStore.set(autoTrainerInstance);
 
+        // Subscribe to auto-train toggle
+        autoTrainEnabled.subscribe(enabled => {
+            if (autoTrainerInstance) {
+                autoTrainerInstance.setEnabled(enabled);
+            }
+        });
+
         // 8. Initialize persistence and restore data
         await persistence.initDB();
         setupPersistence();
@@ -306,6 +314,13 @@ function handleCollectorUpdate(update) {
  * Handle policy/training updates
  */
 function handlePolicyUpdate(status) {
+    console.log('Policy update:', {
+        hasModel: status.hasModel,
+        trainingSessions: status.trainingSessions,
+        nextAutoTrain: status.nextAutoTrain,
+        stage: status.trainingProgress?.stage
+    });
+
     updateModelState({
         hasModel: status.hasModel || false,
         isTraining: status.isTraining || false,
@@ -522,12 +537,17 @@ export function setButton(button, pressed) {
  * Train the model now
  */
 export async function trainNow() {
-    if (!policy || !collector) return false;
+    if (!policy || !collector) {
+        feedSystem('Training not available - system not initialized');
+        return false;
+    }
 
     const experiences = [
         ...collector.explorationBuffer.buffer,
         ...collector.humanBuffer.buffer
     ];
+
+    console.log(`trainNow called with ${experiences.length} experiences`);
 
     if (experiences.length < 100) {
         feedSystem('Need at least 100 experiences to train');
@@ -535,8 +555,24 @@ export async function trainNow() {
     }
 
     feedTraining('Starting manual training...');
-    const result = await policy.trainNow(experiences, { epochs: 30 });
-    return !!result;
+
+    try {
+        const result = await policy.trainNow(experiences, { epochs: 30 });
+
+        if (result) {
+            console.log('Training succeeded:', result);
+            // Force a status update to refresh the UI
+            policy.onStatusChange(policy.getStatus());
+            return true;
+        } else {
+            feedSystem('Training did not complete - check browser console for errors');
+            return false;
+        }
+    } catch (e) {
+        console.error('Training error:', e);
+        feedSystem(`Training failed: ${e.message}`);
+        return false;
+    }
 }
 
 /**
