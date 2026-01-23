@@ -1,11 +1,24 @@
 // LLM state store - manages WebLLM loading and status
 import { writable, derived } from 'svelte/store';
 
+// Get initial model name from localStorage
+function getInitialModelName() {
+    if (typeof localStorage !== 'undefined') {
+        const saved = localStorage.getItem('tesserack-selected-model');
+        if (saved) {
+            // Extract friendly name from model ID
+            const match = saved.match(/^([^-]+-[\d.]+[A-Z]?-[\d.]+[A-Z]?)/);
+            return match ? match[1].replace(/-/g, ' ') : saved.split('-q')[0];
+        }
+    }
+    return 'Qwen2.5-1.5B-Instruct';
+}
+
 export const llmState = writable({
     status: 'idle', // 'idle' | 'loading' | 'ready' | 'error'
     progress: 0,
     message: '',
-    modelName: 'Qwen2.5-1.5B-Instruct',
+    modelName: getInitialModelName(),
     error: null,
 });
 

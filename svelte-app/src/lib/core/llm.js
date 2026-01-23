@@ -4,8 +4,19 @@ import { recordTokenUsage } from '../stores/llm.js';
 
 let engine = null;
 
+const DEFAULT_MODEL = 'Qwen2.5-1.5B-Instruct-q4f16_1-MLC';
+const STORAGE_KEY = 'tesserack-selected-model';
+
+export function getSelectedModel() {
+    if (typeof localStorage !== 'undefined') {
+        return localStorage.getItem(STORAGE_KEY) || DEFAULT_MODEL;
+    }
+    return DEFAULT_MODEL;
+}
+
 export async function initLLM(onProgress) {
-    const selectedModel = 'Qwen2.5-1.5B-Instruct-q4f16_1-MLC';
+    const selectedModel = getSelectedModel();
+    console.log('Initializing LLM with model:', selectedModel);
 
     engine = await webllm.CreateMLCEngine(selectedModel, {
         initProgressCallback: (progress) => {
