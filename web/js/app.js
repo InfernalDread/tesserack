@@ -1,6 +1,8 @@
 // app.js - Main entry point for Tesserack
 import { Emulator } from './emulator.js';
 import { initLLM, generate, isReady } from './llm.js';
+import { GameAgent } from './agent.js';
+import { MemoryReader } from './memory-reader.js';
 
 console.log('Tesserack loading...');
 
@@ -25,6 +27,8 @@ let emulator = null;
 let turboAInterval = null;
 let savedState = null;
 let llmInitialized = false;
+let agent = null;
+let memoryReader = null;
 
 // Initialize AI model
 async function initializeAI() {
@@ -52,6 +56,26 @@ async function initializeAI() {
         statusText.textContent = `AI Error: ${err.message}`;
         console.error('AI initialization error:', err);
     }
+}
+
+// Agent update handler
+function handleAgentUpdate(update) {
+    // Update UI
+    document.getElementById('game-state').innerHTML = formatState(update.state);
+    document.getElementById('reasoning').textContent = update.reasoning;
+    document.getElementById('actions').textContent = update.action.join(', ');
+}
+
+// Format game state for display
+function formatState(state) {
+    return `
+        <div><strong>Location:</strong> ${state.location}</div>
+        <div><strong>Position:</strong> (${state.coordinates.x}, ${state.coordinates.y})</div>
+        <div><strong>Money:</strong> $${state.money}</div>
+        <div><strong>Badges:</strong> ${state.badges.join(', ') || 'None'}</div>
+        <div><strong>Party:</strong></div>
+        ${state.party.map(p => `<div style="margin-left:10px">${p.species} Lv.${p.level} HP:${p.currentHP}/${p.maxHP}</div>`).join('')}
+    `;
 }
 
 // ROM drop handling
@@ -99,6 +123,10 @@ async function loadROM(file) {
         // Set up frame callback to update game state display
         emulator.frameCallback = updateGameStateDisplay;
 
+        // Initialize memory reader and agent
+        memoryReader = new MemoryReader(emulator);
+        agent = new GameAgent(emulator, memoryReader, handleAgentUpdate);
+
         // Start emulator display loop
         emulator.start();
 
@@ -144,20 +172,33 @@ function updateGameStateDisplay() {
 
 // Button handlers
 turboBtn.addEventListener('click', () => {
-    statusText.textContent = 'Turbo mode running... (AI not yet implemented)';
-    // TODO: Start turbo mode with random/heuristic inputs
+    if (agent) {
+        agent.runTurbo();
+        turboBtn.disabled = true;
+        llmBtn.disabled = true;
+        stopBtn.disabled = false;
+        statusText.textContent = 'Turbo mode running...';
+    }
 });
 
 llmBtn.addEventListener('click', () => {
-    statusText.textContent = 'LLM mode... (WebLLM not yet integrated)';
-    // TODO: Start LLM-driven mode
+    if (agent) {
+        agent.runLLM();
+        turboBtn.disabled = true;
+        llmBtn.disabled = true;
+        stopBtn.disabled = false;
+        statusText.textContent = 'LLM mode running...';
+    }
 });
 
 stopBtn.addEventListener('click', () => {
-    if (emulator) {
-        emulator.stop();
-        statusText.textContent = 'Emulator stopped';
+    if (agent) {
+        agent.stop();
     }
+    turboBtn.disabled = false;
+    llmBtn.disabled = !llmInitialized;
+    stopBtn.disabled = true;
+    statusText.textContent = 'Stopped';
     // Stop turbo A if running
     if (turboAInterval) {
         clearInterval(turboAInterval);
@@ -208,25 +249,33 @@ loadBtn.addEventListener('click', () => {
 manualButtons.forEach(btn => {
     const buttonName = btn.dataset.btn;
 
-    // Mouse events
+    // Mouse events - use agent.manualButton for press, direct emulator for hold/release
     btn.addEventListener('mousedown', () => {
-        if (emulator) emulator.setButton(buttonName, true);
+        if (agent && agent.running) {
+            agent.manualButton(buttonName);
+        } else if (emulator) {
+            emulator.setButton(buttonName, true);
+        }
     });
     btn.addEventListener('mouseup', () => {
-        if (emulator) emulator.setButton(buttonName, false);
+        if (emulator && !agent?.running) emulator.setButton(buttonName, false);
     });
     btn.addEventListener('mouseleave', () => {
-        if (emulator) emulator.setButton(buttonName, false);
+        if (emulator && !agent?.running) emulator.setButton(buttonName, false);
     });
 
     // Touch events for mobile
     btn.addEventListener('touchstart', (e) => {
         e.preventDefault();
-        if (emulator) emulator.setButton(buttonName, true);
+        if (agent && agent.running) {
+            agent.manualButton(buttonName);
+        } else if (emulator) {
+            emulator.setButton(buttonName, true);
+        }
     });
     btn.addEventListener('touchend', (e) => {
         e.preventDefault();
-        if (emulator) emulator.setButton(buttonName, false);
+        if (emulator && !agent?.running) emulator.setButton(buttonName, false);
     });
 });
 
