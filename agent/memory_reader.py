@@ -502,3 +502,158 @@ class PokemonData:
     type2: PokemonType | None
     moves: list[str]
     move_pp: list[int]
+
+
+class PokemonRedReader:
+    """Reads game state from Pokemon Red memory."""
+
+    def __init__(self, memory):
+        self.memory = memory
+
+    def _convert_text(self, data: bytes | list[int]) -> str:
+        """Convert Pokemon text encoding to ASCII."""
+        result = []
+        for b in data:
+            if b == 0x50:  # End marker
+                break
+            elif b == 0x7F:  # Space
+                result.append(" ")
+            elif 0x80 <= b <= 0x99:  # A-Z
+                result.append(chr(b - 0x80 + ord("A")))
+            elif 0xA0 <= b <= 0xB9:  # a-z
+                result.append(chr(b - 0xA0 + ord("a")))
+            elif 0xF6 <= b <= 0xFF:  # 0-9
+                result.append(str(b - 0xF6))
+            elif b == 0xE8:  # Period
+                result.append(".")
+            elif b == 0xE3:  # Dash
+                result.append("-")
+            elif b == 0xE7:  # !
+                result.append("!")
+            elif b == 0xE6:  # ?
+                result.append("?")
+            elif b == 0xF4:  # ,
+                result.append(",")
+            elif b == 0xBA:  # é
+                result.append("e")
+        return "".join(result).strip()
+
+    def read_player_name(self) -> str:
+        return self._convert_text(self.memory[0xD158:0xD163])
+
+    def read_rival_name(self) -> str:
+        return self._convert_text(self.memory[0xD34A:0xD351])
+
+    def read_money(self) -> int:
+        """Read money in BCD format."""
+        b1 = self.memory[0xD349]
+        b2 = self.memory[0xD348]
+        b3 = self.memory[0xD347]
+        return (
+            ((b3 >> 4) * 100000) + ((b3 & 0xF) * 10000) +
+            ((b2 >> 4) * 1000) + ((b2 & 0xF) * 100) +
+            ((b1 >> 4) * 10) + (b1 & 0xF)
+        )
+
+    def read_badges(self) -> list[str]:
+        badge_byte = self.memory[0xD356]
+        badges = []
+        for badge in Badge:
+            if badge_byte & badge:
+                badges.append(badge.name)
+        return badges
+
+    def read_location(self) -> str:
+        map_id = self.memory[0xD35E]
+        try:
+            return MapLocation(map_id).name.replace("_", " ")
+        except ValueError:
+            return f"UNKNOWN ({map_id})"
+
+    def read_coordinates(self) -> tuple[int, int]:
+        return (self.memory[0xD362], self.memory[0xD361])
+
+    def read_party_pokemon(self) -> list[PokemonData]:
+        """Read all Pokemon in party."""
+        party = []
+        party_size = self.memory[0xD163]
+
+        base_addrs = [0xD16B, 0xD197, 0xD1C3, 0xD1EF, 0xD21B, 0xD247]
+        nick_addrs = [0xD2B5, 0xD2C0, 0xD2CB, 0xD2D6, 0xD2E1, 0xD2EC]
+
+        for i in range(min(party_size, 6)):
+            addr = base_addrs[i]
+            species_id = self.memory[addr]
+
+            try:
+                species_name = Pokemon(species_id).name.replace("_", " ")
+            except ValueError:
+                continue
+
+            # Read moves
+            moves = []
+            move_pp = []
+            for j in range(4):
+                move_id = self.memory[addr + 8 + j]
+                if move_id != 0:
+                    try:
+                        moves.append(Move(move_id).name.replace("_", " "))
+                        move_pp.append(self.memory[addr + 0x1D + j])
+                    except ValueError:
+                        pass
+
+            type1 = PokemonType(self.memory[addr + 5])
+            type2_raw = self.memory[addr + 6]
+            type2 = PokemonType(type2_raw) if type2_raw != type1 else None
+
+            pokemon = PokemonData(
+                species_id=species_id,
+                species_name=species_name,
+                nickname=self._convert_text(self.memory[nick_addrs[i]:nick_addrs[i] + 11]),
+                level=self.memory[addr + 0x21],
+                current_hp=(self.memory[addr + 1] << 8) + self.memory[addr + 2],
+                max_hp=(self.memory[addr + 0x22] << 8) + self.memory[addr + 0x23],
+                status=StatusCondition(self.memory[addr + 4]),
+                type1=type1,
+                type2=type2,
+                moves=moves,
+                move_pp=move_pp,
+            )
+            party.append(pokemon)
+
+        return party
+
+    def read_items(self) -> list[tuple[str, int]]:
+        """Read inventory items."""
+        items = []
+        count = self.memory[0xD31D]
+
+        for i in range(count):
+            item_id = self.memory[0xD31E + (i * 2)]
+            quantity = self.memory[0xD31F + (i * 2)]
+
+            if 0xC9 <= item_id <= 0xFE:
+                name = f"TM{item_id - 0xC8:02d}"
+            elif 0xC4 <= item_id <= 0xC8:
+                name = f"HM{item_id - 0xC3:02d}"
+            else:
+                name = ITEM_NAMES.get(item_id, f"ITEM_{item_id:02X}")
+
+            items.append((name, quantity))
+
+        return items
+
+    def read_dialog(self) -> str:
+        """Read dialog text from screen buffer."""
+        buffer = [self.memory[addr] for addr in range(0xC3A0, 0xC507)]
+
+        text_chars = []
+        for b in buffer:
+            if 0x80 <= b <= 0x99 or 0xA0 <= b <= 0xB9 or 0xF6 <= b <= 0xFF:
+                text_chars.append(b)
+            elif b == 0x7F:
+                text_chars.append(b)
+            elif b in (0xE6, 0xE7, 0xE8, 0xF4):
+                text_chars.append(b)
+
+        return self._convert_text(text_chars)
