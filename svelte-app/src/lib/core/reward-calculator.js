@@ -1,4 +1,7 @@
 // reward-calculator.js - Computes verifiable rewards from game state transitions
+// Now integrated with Prima Strategy Guide curriculum for structured checkpoints
+
+import { curriculumTracker } from './curriculum.js';
 
 /**
  * Reward values for different game events
@@ -196,6 +199,23 @@ export class RewardCalculator {
             this.stepsSinceProgress = 0; // Reset
         }
 
+        // Prima Guide curriculum checkpoints
+        const completedCheckpoints = curriculumTracker.checkProgress(currState);
+        if (completedCheckpoints.length > 0) {
+            breakdown.curriculum = 0;
+            breakdown.checkpoints = [];
+            for (const checkpoint of completedCheckpoints) {
+                breakdown.curriculum += checkpoint.reward;
+                breakdown.checkpoints.push({
+                    name: checkpoint.name,
+                    type: checkpoint.type,
+                    reward: checkpoint.reward,
+                });
+            }
+            total += breakdown.curriculum;
+            this.stepsSinceProgress = 0; // Checkpoint = progress
+        }
+
         // Store for history
         this.totalReward += total;
         if (total !== 0) {
@@ -218,19 +238,37 @@ export class RewardCalculator {
      * Get summary statistics
      */
     getStats() {
+        const curriculumStats = curriculumTracker.getStats();
         return {
             totalReward: this.totalReward,
             visitedMaps: this.visitedMaps.size,
             caughtPokemon: this.caughtPokemon.size,
             rewardEvents: this.rewardHistory.length,
             recentRewards: this.rewardHistory.slice(-10),
+            // Curriculum progress
+            curriculum: {
+                completed: curriculumStats.completedCheckpoints,
+                total: curriculumStats.totalCheckpoints,
+                percent: curriculumStats.completionPercent,
+                badges: curriculumStats.badges,
+                nextObjective: curriculumStats.nextCheckpoint?.name || 'Complete!',
+            },
         };
     }
 
     /**
-     * Reset calculator state
+     * Get curriculum summary for LLM context
+     * @returns {string}
      */
-    reset() {
+    getCurriculumSummary() {
+        return curriculumTracker.getSummaryForLLM();
+    }
+
+    /**
+     * Reset calculator state
+     * @param {boolean} includeCurriculum - Also reset curriculum progress
+     */
+    reset(includeCurriculum = false) {
         this.prevState = null;
         this.totalReward = 0;
         this.rewardHistory = [];
@@ -239,6 +277,10 @@ export class RewardCalculator {
         this.stepsSinceProgress = 0;
         this.lastPosition = null;
         this.positionStuckCount = 0;
+
+        if (includeCurriculum) {
+            curriculumTracker.reset();
+        }
     }
 
     /**
