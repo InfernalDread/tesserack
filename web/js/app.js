@@ -317,6 +317,11 @@ const keyMap = {
 };
 
 document.addEventListener('keydown', (e) => {
+    // Don't capture keys when typing in input fields
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
+        return;
+    }
+
     const button = keyMap[e.key];
     if (button && agent) {
         agent.manualButton(button);
