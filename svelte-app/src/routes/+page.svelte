@@ -1,6 +1,6 @@
 <script>
     import { onMount } from 'svelte';
-    import { Info } from 'lucide-svelte';
+    import { Info, Github, ExternalLink } from 'lucide-svelte';
 
     // Components
     import Header from '$lib/components/Header.svelte';
@@ -68,6 +68,24 @@
             All data is stored locally in your browser. Your training progress, experiences, and AI model persist across sessions but are specific to this browser and device. Use the Export function to back up your data or transfer it elsewhere.
         </p>
     </footer>
+
+    <footer class="credits-footer">
+        <span>Made by Sid Mohan</span>
+        <div class="credits-links">
+            <a href="https://github.com/sidmohan0" target="_blank" rel="noopener noreferrer">
+                <Github size={14} />
+                <span>GitHub</span>
+            </a>
+            <a href="https://threadfork.com" target="_blank" rel="noopener noreferrer">
+                <ExternalLink size={14} />
+                <span>Threadfork</span>
+            </a>
+            <a href="https://datafog.ai" target="_blank" rel="noopener noreferrer">
+                <ExternalLink size={14} />
+                <span>DataFog</span>
+            </a>
+        </div>
+    </footer>
 </div>
 
 <style>
@@ -123,5 +141,38 @@
     .info-footer :global(svg) {
         flex-shrink: 0;
         margin-top: 2px;
+    }
+
+    .credits-footer {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 16px;
+        margin-top: 16px;
+        padding: 12px;
+        font-size: 12px;
+        color: var(--text-muted);
+    }
+
+    .credits-footer span {
+        font-weight: 500;
+    }
+
+    .credits-links {
+        display: flex;
+        gap: 16px;
+    }
+
+    .credits-links a {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        color: var(--text-secondary);
+        text-decoration: none;
+        transition: color 0.15s;
+    }
+
+    .credits-links a:hover {
+        color: var(--accent-primary);
     }
 </style>
