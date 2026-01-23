@@ -11,9 +11,14 @@
         <header>
             <h1>LocalLLMPlaysPokemon</h1>
             <div class="controls">
-                <button id="startBtn">Start</button>
+                <div class="mode-select">
+                    <span class="mode-label">Start:</span>
+                    <button id="turboBtn" class="mode-btn primary">▶ Turbo (Fast)</button>
+                    <button id="startBtn" class="mode-btn">▶ LLM (Smart)</button>
+                </div>
                 <button id="stopBtn" disabled>Stop</button>
-                <button id="stepBtn" disabled>Step</button>
+                <button id="saveBtn" disabled>Save</button>
+                <button id="loadBtn" disabled>Load</button>
             </div>
         </header>
 
@@ -37,6 +42,29 @@
                 </div>
                 <div class="action">
                     <strong>Action:</strong> <span id="action">-</span>
+                </div>
+            </div>
+
+            <div class="controls-panel">
+                <h2>Manual Controls</h2>
+                <div class="dpad">
+                    <button class="btn-up" data-button="up">&#9650;</button>
+                    <div class="dpad-row">
+                        <button class="btn-left" data-button="left">&#9664;</button>
+                        <button class="btn-right" data-button="right">&#9654;</button>
+                    </div>
+                    <button class="btn-down" data-button="down">&#9660;</button>
+                </div>
+                <div class="action-buttons">
+                    <button class="btn-b" data-button="b">B</button>
+                    <button class="btn-a" data-button="a">A</button>
+                </div>
+                <div class="menu-buttons">
+                    <button class="btn-select" data-button="select">Select</button>
+                    <button class="btn-start" data-button="start">Start</button>
+                </div>
+                <div class="turbo-controls">
+                    <button id="turboA">Turbo A (hold)</button>
                 </div>
             </div>
         </main>

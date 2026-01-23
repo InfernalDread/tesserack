@@ -15,25 +15,38 @@ def parse_response(response: str) -> tuple[str, list[str]]:
     Returns:
         Tuple of (reasoning, list of button names)
     """
-    # Extract reasoning (everything before ACTION:)
-    reasoning = response.strip()
+    print(f"[LLM RAW] {response[:500]}")  # Log first 500 chars
+
+    reasoning = ""
     actions = []
 
-    # Look for ACTION: line
-    match = re.search(r'ACTION:\s*(.+?)(?:\n|$)', response, re.IGNORECASE)
+    # Look for PLAN: line
+    plan_match = re.search(r'PLAN:\s*(.+?)(?:\n|$)', response, re.IGNORECASE)
+    if plan_match:
+        reasoning = plan_match.group(1).strip()
+
+    # Look for ACTIONS: line (plural, for batch)
+    match = re.search(r'ACTIONS?:\s*(.+?)(?:\n|$)', response, re.IGNORECASE)
     if match:
         action_str = match.group(1)
-        # Split reasoning from action
-        action_start = response.lower().find("action:")
-        if action_start > 0:
-            reasoning = response[:action_start].strip()
-
         # Parse button sequence
         buttons = re.split(r'[,\s]+', action_str.lower())
         actions = [b.strip() for b in buttons if b.strip() in VALID_BUTTONS]
 
-    # Default to pressing 'a' if no valid actions found
+    # If no plan found, use everything before ACTIONS as reasoning
+    if not reasoning:
+        action_start = re.search(r'actions?:', response, re.IGNORECASE)
+        if action_start:
+            reasoning = response[:action_start.start()].strip()
+        else:
+            reasoning = response.strip()
+
+    # Default to exploration if no valid actions found
     if not actions:
-        actions = ["a"]
+        print("[PARSER] No valid actions found, defaulting to: right, right, a")
+        actions = ["right", "right", "a"]
+
+    print(f"[PARSER] Plan: {reasoning[:100]}")
+    print(f"[PARSER] Actions: {actions}")
 
     return reasoning, actions

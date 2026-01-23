@@ -37,7 +37,7 @@ class Emulator:
         for _ in range(frames):
             self.pyboy.tick()
 
-    def press_button(self, button: str, hold_frames: int = 10, wait_frames: int = 20):
+    def press_button(self, button: str, hold_frames: int = 5, wait_frames: int = 10):
         """Press a single button."""
         if button not in self.VALID_BUTTONS:
             return False

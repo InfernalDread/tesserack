@@ -6,5 +6,8 @@ __pycache__/
 *.gbc
 *.sav
 *.state
+*.ram
 models/*.gguf
+saves/
+ClaudePlaysPokemonStarter/
 .DS_Store
