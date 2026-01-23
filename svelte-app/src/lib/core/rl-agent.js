@@ -4,6 +4,7 @@ import { chat, resetContext } from './llm.js';
 import { parseResponse } from './action-parser.js';
 import { RewardCalculator } from './reward-calculator.js';
 import { ExperienceBuffer, ActionStatistics } from './experience-buffer.js';
+import { curriculumTracker } from './curriculum.js';
 
 /**
  * System prompt that asks LLM to generate multiple candidate plans
@@ -140,12 +141,27 @@ export class RLAgent {
 
     /**
      * Build user message for LLM
+     * Now uses Prima Strategy Guide curriculum for objectives
      */
     buildUserMessage(state) {
-        const objective = getObjective(state);
+        // Check curriculum progress and get next objective
+        curriculumTracker.checkProgress(state);
+        const nextCheckpoint = curriculumTracker.getNextCheckpoint();
+        const stats = curriculumTracker.getStats();
+
         const lines = [];
 
-        lines.push(`OBJECTIVE: ${objective.description}`);
+        // Prima Guide objective
+        if (nextCheckpoint) {
+            lines.push(`OBJECTIVE: ${nextCheckpoint.name}`);
+            lines.push(`  "${nextCheckpoint.description}"`);
+            lines.push(`  (From Prima Strategy Guide - ${nextCheckpoint.guideRef || 'official walkthrough'})`);
+        } else {
+            lines.push('OBJECTIVE: Become Pokemon Champion!');
+        }
+
+        lines.push('');
+        lines.push(`PROGRESS: ${stats.completionPercent}% complete (${stats.badges})`);
         lines.push('');
         lines.push('GAME STATE:');
         lines.push(`Location: ${state.location}`);
