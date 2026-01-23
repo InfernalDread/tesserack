@@ -1,8 +1,8 @@
-// app.js - Main entry point for Tesserack
+// app.js - Final version - Main entry point for Tesserack
 import { Emulator } from './emulator.js';
-import { initLLM, generate, isReady } from './llm.js';
-import { GameAgent } from './agent.js';
 import { MemoryReader } from './memory-reader.js';
+import { initLLM, isReady } from './llm.js';
+import { GameAgent } from './agent.js';
 import { saveState, loadState, hasSavedState } from './storage.js';
 
 console.log('Tesserack loading...');
