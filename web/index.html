@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tesserack - AI Plays Pokemon</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Tesserack</h1>
+            <p class="subtitle">AI Plays Pokemon (Browser Edition)</p>
+        </header>
+
+        <div id="status-bar">
+            <span id="status-text">Drop ROM to start</span>
+            <div id="progress-container" style="display:none">
+                <div id="progress-bar"></div>
+                <span id="progress-text">0%</span>
+            </div>
+        </div>
+
+        <main>
+            <div class="game-panel">
+                <div id="rom-drop" class="drop-zone">
+                    <p>Drop Pokemon Red ROM here</p>
+                    <p class="small">or click to select file</p>
+                    <input type="file" id="rom-input" accept=".gb,.gbc" style="display:none">
+                </div>
+                <canvas id="game-canvas" width="160" height="144" style="display:none"></canvas>
+            </div>
+
+            <div class="info-panel">
+                <div class="controls-row">
+                    <div class="mode-select">
+                        <span class="mode-label">Start:</span>
+                        <button id="turbo-btn" class="mode-btn primary" disabled>▶ Turbo</button>
+                        <button id="llm-btn" class="mode-btn" disabled>▶ LLM</button>
+                    </div>
+                    <button id="stop-btn" disabled>Stop</button>
+                    <button id="save-btn" disabled>Save</button>
+                    <button id="load-btn" disabled>Load</button>
+                </div>
+
+                <div class="state-panel">
+                    <h3>Game State</h3>
+                    <div id="game-state">Waiting for ROM...</div>
+                </div>
+
+                <div class="reasoning-panel">
+                    <h3>LLM Reasoning</h3>
+                    <div id="reasoning">-</div>
+                    <div class="action-display">
+                        <strong>Actions:</strong> <span id="actions">-</span>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <div class="manual-controls">
+            <div class="dpad">
+                <button data-btn="up" class="dpad-up">▲</button>
+                <div class="dpad-middle">
+                    <button data-btn="left" class="dpad-left">◀</button>
+                    <button data-btn="right" class="dpad-right">▶</button>
+                </div>
+                <button data-btn="down" class="dpad-down">▼</button>
+            </div>
+            <div class="action-btns">
+                <button data-btn="b" class="btn-b">B</button>
+                <button data-btn="a" class="btn-a">A</button>
+            </div>
+            <div class="menu-btns">
+                <button data-btn="select" class="btn-select">Select</button>
+                <button data-btn="start" class="btn-start">Start</button>
+            </div>
+            <button id="turbo-a-btn" class="turbo-a">Turbo A</button>
+        </div>
+    </div>
+
+    <script type="module" src="js/app.js"></script>
+</body>
+</html>
