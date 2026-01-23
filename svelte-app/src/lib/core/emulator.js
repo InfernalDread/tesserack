@@ -1,6 +1,8 @@
 // emulator.js - GameBoy emulator wrapper using binjgb
 // Provides a clean API for loading ROMs, rendering, input, memory access, and state management
 
+import { base } from '$app/paths';
+
 // Track if binjgb script has been loaded
 let binjgbLoaded = false;
 let binjgbLoadPromise = null;
@@ -27,7 +29,7 @@ function loadBinjgbScript() {
         }
 
         const script = document.createElement('script');
-        script.src = '/lib/binjgb.js';
+        script.src = `${base}/lib/binjgb.js`;
         script.onload = () => {
             binjgbLoaded = true;
             resolve();
