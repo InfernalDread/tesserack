@@ -10,6 +10,15 @@ export class ExperienceBuffer {
         this.buffer = [];
         this.position = 0;
         this.totalExperiences = 0;
+        this.onAdd = null; // Callback when experience is added (for persistence)
+    }
+
+    /**
+     * Set callback for when experiences are added
+     * @param {Function} callback - Function to call with new experience
+     */
+    setOnAdd(callback) {
+        this.onAdd = callback;
     }
 
     /**
@@ -112,6 +121,11 @@ export class ExperienceBuffer {
         }
 
         this.position = (this.position + 1) % this.maxSize;
+
+        // Notify persistence layer
+        if (this.onAdd) {
+            this.onAdd(experience);
+        }
     }
 
     /**

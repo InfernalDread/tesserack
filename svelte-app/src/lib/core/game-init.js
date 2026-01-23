@@ -193,6 +193,9 @@ export async function initializeGame(romBuffer, gameCanvas) {
         collector = new DataCollector(emu, reader, handleCollectorUpdate);
         dataCollector.set(collector);
 
+        // Wire up experience persistence
+        collector.explorationBuffer.setOnAdd(queueExperienceForSave);
+
         // 5. Create reward system
         rewardSystem = new CombinedRewardSystem(canvas, reader);
         rlAgentInstance.setExternalRewardSource(rewardSystem);
