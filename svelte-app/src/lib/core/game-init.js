@@ -334,13 +334,14 @@ function handlePolicyUpdate(status) {
 
 /**
  * Handle auto-training events
+ * Only show completion messages to avoid spamming the feed
  */
 function handleAutoTrainEvent(event) {
-    if (event.type === 'training-starting') {
-        feedTraining(`Auto-training starting (${event.experienceCount} experiences)...`);
-    } else if (event.type === 'training-complete') {
-        feedTraining('Model improved!', 'success');
+    if (event.type === 'training-complete') {
+        feedTraining('Neural network trained! Model improved.', 'success');
     }
+    // Note: 'training-starting' events are intentionally not shown
+    // to avoid cluttering the activity feed
 }
 
 // ============ MODE CONTROL ============

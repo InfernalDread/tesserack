@@ -38,18 +38,18 @@
 <div class="game-controls panel">
     <div class="dpad">
         <button class="dpad-btn up" on:click={() => press('up')}>
-            <ChevronUp size={18} />
+            <ChevronUp size={28} strokeWidth={3} />
         </button>
         <div class="dpad-row">
             <button class="dpad-btn left" on:click={() => press('left')}>
-                <ChevronLeft size={18} />
+                <ChevronLeft size={28} strokeWidth={3} />
             </button>
             <button class="dpad-btn right" on:click={() => press('right')}>
-                <ChevronRight size={18} />
+                <ChevronRight size={28} strokeWidth={3} />
             </button>
         </div>
         <button class="dpad-btn down" on:click={() => press('down')}>
-            <ChevronDown size={18} />
+            <ChevronDown size={28} strokeWidth={3} />
         </button>
     </div>
 

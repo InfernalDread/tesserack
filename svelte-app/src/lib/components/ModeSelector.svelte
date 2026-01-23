@@ -75,8 +75,9 @@
     </div>
 
     <!-- Progress Indicator -->
-    <div class="progress-section" title="{$stats.experiences.toLocaleString()} / {currentThreshold.toLocaleString()} experiences">
+    <div class="progress-section" title="Training data: {$stats.experiences.toLocaleString()} samples collected. Auto-trains at {currentThreshold.toLocaleString()}.">
         <div class="progress-bar-container">
+            <div class="progress-label">Learning Progress</div>
             <div class="progress-bar">
                 <div
                     class="progress-fill"
@@ -87,12 +88,12 @@
             <div class="progress-info">
                 {#if isTraining}
                     <Zap size={12} class="training-icon" />
-                    <span>Training...</span>
+                    <span>Training neural network...</span>
                 {:else if level > 0}
-                    <span class="level">Lv.{level}</span>
-                    <span class="exp">{$stats.experiences.toLocaleString()} exp</span>
+                    <span class="level">Trained {level}x</span>
+                    <span class="samples">{$stats.experiences.toLocaleString()} samples</span>
                 {:else}
-                    <span class="exp">{$stats.experiences.toLocaleString()} / {currentThreshold.toLocaleString()}</span>
+                    <span class="samples">{$stats.experiences.toLocaleString()} / {currentThreshold.toLocaleString()} samples</span>
                 {/if}
             </div>
         </div>
@@ -262,12 +263,21 @@
         to { opacity: 1; }
     }
 
+    .progress-label {
+        font-size: 10px;
+        font-weight: 500;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        color: var(--text-muted);
+        margin-bottom: 4px;
+    }
+
     .level {
         font-weight: 600;
         color: var(--accent-primary);
     }
 
-    .exp {
+    .samples {
         color: var(--text-secondary);
     }
 
