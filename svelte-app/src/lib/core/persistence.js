@@ -306,6 +306,82 @@ export async function clearLLMTests() {
     return clearStore(STORES.LLM_TESTS);
 }
 
+// ============ ROM STORAGE ============
+
+const ROM_KEY = 'tesserack-rom';
+
+/**
+ * Save ROM to IndexedDB for returning users
+ */
+export async function saveROM(romBuffer) {
+    const database = await initDB();
+
+    // Create a simple object store transaction for ROM
+    // We'll store it as a blob in localStorage since it's simpler
+    // and ROMs are typically < 2MB
+    try {
+        const base64 = arrayBufferToBase64(romBuffer);
+        localStorage.setItem(ROM_KEY, base64);
+        console.log('[Persistence] ROM saved');
+        return true;
+    } catch (e) {
+        console.error('[Persistence] Failed to save ROM:', e);
+        return false;
+    }
+}
+
+/**
+ * Load ROM from storage
+ */
+export function loadROM() {
+    try {
+        const base64 = localStorage.getItem(ROM_KEY);
+        if (!base64) return null;
+
+        const buffer = base64ToArrayBuffer(base64);
+        console.log('[Persistence] ROM loaded from storage');
+        return buffer;
+    } catch (e) {
+        console.error('[Persistence] Failed to load ROM:', e);
+        return null;
+    }
+}
+
+/**
+ * Check if ROM is saved
+ */
+export function hasROM() {
+    return !!localStorage.getItem(ROM_KEY);
+}
+
+/**
+ * Clear saved ROM
+ */
+export function clearROM() {
+    localStorage.removeItem(ROM_KEY);
+}
+
+// Helper functions for ArrayBuffer <-> Base64
+function arrayBufferToBase64(buffer) {
+    const bytes = new Uint8Array(buffer);
+    let binary = '';
+    const chunkSize = 8192;
+    for (let i = 0; i < bytes.length; i += chunkSize) {
+        const chunk = bytes.subarray(i, Math.min(i + chunkSize, bytes.length));
+        binary += String.fromCharCode.apply(null, chunk);
+    }
+    return btoa(binary);
+}
+
+function base64ToArrayBuffer(base64) {
+    const binary = atob(base64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) {
+        bytes[i] = binary.charCodeAt(i);
+    }
+    return bytes.buffer;
+}
+
 // ============ METADATA (localStorage) ============
 
 const META_KEY = 'tesserack-meta';

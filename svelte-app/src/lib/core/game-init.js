@@ -408,6 +408,90 @@ export function stopAll() {
     feedSystem('Stopped');
 }
 
+// ============ INTRO SKIP ============
+
+let introSkipRunning = false;
+let introSkipInterval = null;
+
+/**
+ * Auto-play through the intro (name entry, etc.)
+ * Runs until player has a party (indicating starter received)
+ * or until cancelled
+ */
+export function startIntroSkip() {
+    if (!emu || introSkipRunning) return;
+
+    introSkipRunning = true;
+    let stepCount = 0;
+
+    feedSystem('Auto-playing through intro...');
+
+    // Button sequence timing
+    const pressInterval = 150; // ms between presses
+
+    introSkipInterval = setInterval(() => {
+        if (!introSkipRunning || !emu) {
+            stopIntroSkip();
+            return;
+        }
+
+        stepCount++;
+
+        // Check if we have a Pokemon (intro complete)
+        try {
+            const state = reader?.getGameState();
+            if (state?.party?.length > 0) {
+                feedSystem('Intro complete! You have your starter Pokemon.');
+                stopIntroSkip();
+                return;
+            }
+        } catch (e) {
+            // Ignore read errors during intro
+        }
+
+        // Safety limit - stop after ~5 minutes of auto-play
+        if (stepCount > 2000) {
+            feedSystem('Intro skip timed out. You may need to continue manually.');
+            stopIntroSkip();
+            return;
+        }
+
+        // Alternate between A and random navigation
+        // This handles text boxes (A), menus (A), and name entry (arrows + A)
+        if (stepCount % 10 === 0) {
+            // Occasionally press Start (for title screen)
+            emu.pressButton('start', 100);
+        } else if (stepCount % 5 === 0) {
+            // Navigate down in menus
+            emu.pressButton('down', 80);
+        } else if (stepCount % 7 === 0) {
+            // Navigate right in name entry
+            emu.pressButton('right', 80);
+        } else {
+            // Mostly mash A to advance text
+            emu.pressButton('a', 80);
+        }
+    }, pressInterval);
+}
+
+/**
+ * Stop intro skip
+ */
+export function stopIntroSkip() {
+    introSkipRunning = false;
+    if (introSkipInterval) {
+        clearInterval(introSkipInterval);
+        introSkipInterval = null;
+    }
+}
+
+/**
+ * Check if intro skip is running
+ */
+export function isIntroSkipRunning() {
+    return introSkipRunning;
+}
+
 // ============ INPUT CONTROL ============
 
 /**

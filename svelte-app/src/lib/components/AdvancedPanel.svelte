@@ -1,12 +1,10 @@
 <script>
     import { modelState, trainingProgress, autoTrainEnabled } from '$lib/stores/training';
     import { stats } from '$lib/stores/agent';
-    import { ChevronDown, ChevronUp, Download, Trash2, Save, Upload } from 'lucide-svelte';
+    import { ChevronDown, ChevronUp, Download, Trash2 } from 'lucide-svelte';
     import {
         trainNow as doTrainNow,
         clearModel as doClearModel,
-        saveGame as doSaveGame,
-        loadGame as doLoadGame,
         exportTrainingData,
         exportModel,
         exportDiscoveries
@@ -52,14 +50,6 @@
         if (confirm('Clear the trained model? You will need to retrain.')) {
             await doClearModel();
         }
-    }
-
-    function saveGame() {
-        doSaveGame();
-    }
-
-    function loadGame() {
-        doLoadGame();
     }
 </script>
 
@@ -130,22 +120,6 @@
                 </div>
             </div>
 
-            <!-- Save/Load Section -->
-            <div class="section">
-                <div class="section-title">Save & Load</div>
-                <div class="section-content">
-                    <div class="button-row">
-                        <button class="btn-ghost" on:click={saveGame}>
-                            <Save size={14} />
-                            Save Game
-                        </button>
-                        <button class="btn-ghost" on:click={loadGame}>
-                            <Upload size={14} />
-                            Load Game
-                        </button>
-                    </div>
-                </div>
-            </div>
         </div>
     {/if}
 </div>

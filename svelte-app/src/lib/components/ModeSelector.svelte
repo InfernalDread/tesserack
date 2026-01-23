@@ -1,7 +1,7 @@
 <script>
     import { activeMode } from '$lib/stores/agent';
-    import { startWatchMode, stopAll } from '$lib/core/game-init.js';
-    import { Play, Eye, Square } from 'lucide-svelte';
+    import { startWatchMode, stopAll, saveGame, loadGame, hasSavedGame } from '$lib/core/game-init.js';
+    import { Play, Eye, Square, Save, Upload } from 'lucide-svelte';
     import PotionProgress from './PotionProgress.svelte';
 
     function selectMode(mode) {
@@ -24,6 +24,14 @@
     function stop() {
         stopAll();
         activeMode.set('idle');
+    }
+
+    function handleSave() {
+        saveGame();
+    }
+
+    function handleLoad() {
+        loadGame();
     }
 
     $: isRunning = $activeMode !== 'idle';
@@ -60,6 +68,26 @@
             <Square size={16} />
             <span>Stop</span>
         </button>
+
+        <div class="divider"></div>
+
+        <button
+            class="control-btn save"
+            on:click={handleSave}
+            title="Save game state"
+        >
+            <Save size={16} />
+            <span>Save</span>
+        </button>
+
+        <button
+            class="control-btn load"
+            on:click={handleLoad}
+            title="Load saved game"
+        >
+            <Upload size={16} />
+            <span>Load</span>
+        </button>
     </div>
 
     <PotionProgress />
@@ -75,7 +103,15 @@
 
     .controls {
         display: flex;
+        align-items: center;
         gap: 8px;
+    }
+
+    .divider {
+        width: 1px;
+        height: 24px;
+        background: var(--border-color);
+        margin: 0 4px;
     }
 
     .control-btn {
@@ -89,12 +125,14 @@
         transition: all 0.15s ease;
     }
 
-    .control-btn.watch {
+    .control-btn.watch,
+    .control-btn.play {
         background: var(--bg-input);
         color: var(--text-secondary);
     }
 
-    .control-btn.watch:hover {
+    .control-btn.watch:hover,
+    .control-btn.play:hover {
         background: var(--bg-dark);
         color: var(--text-primary);
     }
@@ -102,16 +140,6 @@
     .control-btn.watch.active {
         background: var(--accent-primary);
         color: white;
-    }
-
-    .control-btn.play {
-        background: var(--bg-input);
-        color: var(--text-secondary);
-    }
-
-    .control-btn.play:hover {
-        background: var(--bg-dark);
-        color: var(--text-primary);
     }
 
     .control-btn.play.active {
@@ -134,5 +162,19 @@
 
     .control-btn.stop:hover {
         background: #ff8787;
+    }
+
+    .control-btn.save,
+    .control-btn.load {
+        background: transparent;
+        color: var(--text-muted);
+        padding: 8px 12px;
+        font-size: 12px;
+    }
+
+    .control-btn.save:hover,
+    .control-btn.load:hover {
+        background: var(--bg-input);
+        color: var(--text-primary);
     }
 </style>
