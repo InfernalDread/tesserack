@@ -1,6 +1,7 @@
 import adapter from '@sveltejs/adapter-static';
 
 const dev = process.argv.includes('dev');
+const isVercel = process.env.VERCEL === '1';
 
 /** @type {import('@sveltejs/kit').Config} */
 const config = {
@@ -13,8 +14,8 @@ const config = {
 			strict: true
 		}),
 		paths: {
-			// Use /tesserack base path for GitHub Pages, empty for local dev
-			base: dev ? '' : '/tesserack'
+			// Use /tesserack base path for GitHub Pages, empty for Vercel/local dev
+			base: dev || isVercel ? '' : '/tesserack'
 		}
 	}
 };
