@@ -12,7 +12,7 @@
         exportDiscoveries
     } from '$lib/core/game-init.js';
 
-    let expanded = false;
+    let expanded = true;
 
     // Available WebLLM models
     const AVAILABLE_MODELS = [
