@@ -1,9 +1,47 @@
 <script>
     import { activeMode, aiState, stats } from '$lib/stores/agent';
     import { trainingProgress } from '$lib/stores/training';
-    import { Brain, Sparkles } from 'lucide-svelte';
+    import { Brain, Sparkles, Target, Zap, ArrowRight } from 'lucide-svelte';
 
     $: isRunning = $activeMode !== 'idle';
+
+    // Parse reasoning into plan and status
+    $: parsedReasoning = parseReasoning($aiState.reasoning);
+
+    function parseReasoning(text) {
+        if (!text) return { plan: '', status: '', remaining: null };
+
+        // Check for "Executing: X (Y remaining)" format
+        const execMatch = text.match(/Executing:\s*(.+?)\s*\((\d+)\s*remaining\)/);
+        if (execMatch) {
+            return {
+                plan: execMatch[1].trim(),
+                status: 'executing',
+                remaining: parseInt(execMatch[2])
+            };
+        }
+
+        // Check for "Plan [source]" format
+        const planMatch = text.match(/^(.+?)\s*\[([^\]]+)\]$/);
+        if (planMatch) {
+            return {
+                plan: planMatch[1].trim(),
+                status: 'planning',
+                source: planMatch[2]
+            };
+        }
+
+        return { plan: text, status: 'thinking' };
+    }
+
+    // Format action for display
+    function formatAction(action) {
+        const icons = {
+            'up': '↑', 'down': '↓', 'left': '←', 'right': '→',
+            'a': 'A', 'b': 'B', 'start': 'ST', 'select': 'SE'
+        };
+        return icons[action.toLowerCase()] || action;
+    }
 </script>
 
 <div class="ai-panel panel">
@@ -34,26 +72,58 @@
         <div class="panel-header">
             <Brain size={16} class="header-icon active" />
             <span class="panel-title">AI Thinking</span>
+            {#if parsedReasoning.status === 'executing'}
+                <span class="status-badge executing">
+                    <Zap size={10} />
+                    Executing
+                </span>
+            {:else if parsedReasoning.status === 'planning'}
+                <span class="status-badge planning">Planning</span>
+            {/if}
         </div>
 
-        <div class="objective">
-            {$aiState.objective || 'Analyzing game state...'}
-        </div>
+        {#if $aiState.objective}
+            <div class="objective-row">
+                <Target size={14} class="objective-icon" />
+                <span class="objective-text">{$aiState.objective}</span>
+            </div>
+        {/if}
 
-        <div class="reasoning">
-            {$aiState.reasoning || 'Deciding next action...'}
+        <div class="plan-box">
+            <div class="plan-label">Current Strategy</div>
+            <div class="plan-text">
+                {parsedReasoning.plan || 'Analyzing game state...'}
+            </div>
+            {#if parsedReasoning.remaining !== null && parsedReasoning.remaining !== undefined}
+                <div class="remaining-bar">
+                    <div class="remaining-fill" style="width: {Math.min(100, parsedReasoning.remaining * 10)}%"></div>
+                </div>
+                <div class="remaining-text">{parsedReasoning.remaining} actions queued</div>
+            {/if}
         </div>
 
         {#if $aiState.actions.length > 0}
             <div class="actions">
-                <span class="actions-label">Actions:</span>
-                <span class="actions-list">{$aiState.actions.join(', ')}</span>
+                <span class="actions-label">Next:</span>
+                <div class="action-buttons">
+                    {#each $aiState.actions.slice(0, 8) as action, i}
+                        <span class="action-btn" class:current={i === 0}>
+                            {formatAction(action)}
+                        </span>
+                        {#if i < Math.min($aiState.actions.length - 1, 7)}
+                            <ArrowRight size={10} class="action-arrow" />
+                        {/if}
+                    {/each}
+                    {#if $aiState.actions.length > 8}
+                        <span class="more-actions">+{$aiState.actions.length - 8}</span>
+                    {/if}
+                </div>
             </div>
         {/if}
 
         {#if $aiState.planSource}
             <div class="source">
-                via {$aiState.planSource}
+                via <span class="source-name">{$aiState.planSource}</span>
             </div>
         {/if}
 
@@ -110,42 +180,152 @@
         color: var(--text-secondary);
     }
 
-    .objective {
-        font-size: 14px;
-        font-weight: 500;
-        color: var(--text-primary);
-        margin-bottom: 8px;
+    .status-badge {
+        margin-left: auto;
+        font-size: 10px;
+        font-weight: 600;
+        padding: 3px 8px;
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        gap: 4px;
     }
 
-    .reasoning {
+    .status-badge.executing {
+        background: rgba(116, 185, 255, 0.2);
+        color: var(--accent-primary);
+    }
+
+    .status-badge.planning {
+        background: rgba(253, 203, 110, 0.2);
+        color: #fdcb6e;
+    }
+
+    .objective-row {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+        margin-bottom: 12px;
+        padding: 8px 10px;
+        background: rgba(116, 185, 255, 0.1);
+        border-radius: var(--border-radius-sm);
+        border-left: 3px solid var(--accent-primary);
+    }
+
+    .objective-row :global(.objective-icon) {
+        color: var(--accent-primary);
+        flex-shrink: 0;
+        margin-top: 2px;
+    }
+
+    .objective-text {
         font-size: 13px;
-        color: var(--text-secondary);
-        line-height: 1.5;
+        font-weight: 500;
+        color: var(--text-primary);
+        line-height: 1.4;
+    }
+
+    .plan-box {
+        background: var(--bg-input);
+        border-radius: var(--border-radius-sm);
+        padding: 12px;
         margin-bottom: 12px;
     }
 
-    .actions {
-        background: var(--bg-input);
-        padding: 10px 12px;
-        border-radius: var(--border-radius-sm);
+    .plan-label {
+        font-size: 10px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        color: var(--text-muted);
+        margin-bottom: 6px;
+    }
+
+    .plan-text {
         font-size: 13px;
+        color: var(--text-secondary);
+        line-height: 1.5;
+    }
+
+    .remaining-bar {
+        height: 3px;
+        background: var(--bg-dark);
+        border-radius: 2px;
+        margin-top: 10px;
+        overflow: hidden;
+    }
+
+    .remaining-fill {
+        height: 100%;
+        background: var(--accent-primary);
+        transition: width 0.3s ease;
+    }
+
+    .remaining-text {
+        font-size: 11px;
+        color: var(--text-muted);
+        margin-top: 4px;
+    }
+
+    .actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 8px;
     }
 
     .actions-label {
+        font-size: 12px;
         color: var(--text-muted);
-        margin-right: 8px;
     }
 
-    .actions-list {
-        color: var(--accent-primary);
-        font-weight: 500;
+    .action-buttons {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        flex-wrap: wrap;
+    }
+
+    .action-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 24px;
+        height: 24px;
+        padding: 0 6px;
+        background: var(--bg-input);
+        border: 1px solid var(--border-color);
+        border-radius: 4px;
+        font-size: 11px;
+        font-weight: 600;
         font-family: monospace;
+        color: var(--text-secondary);
+    }
+
+    .action-btn.current {
+        background: var(--accent-primary);
+        border-color: var(--accent-primary);
+        color: white;
+    }
+
+    .action-buttons :global(.action-arrow) {
+        color: var(--text-muted);
+    }
+
+    .more-actions {
+        font-size: 11px;
+        color: var(--text-muted);
+        margin-left: 4px;
     }
 
     .source {
-        margin-top: 8px;
         font-size: 11px;
         color: var(--text-muted);
+    }
+
+    .source-name {
+        color: var(--text-secondary);
+        font-weight: 500;
     }
 
     .training-status {
