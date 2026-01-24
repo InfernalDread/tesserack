@@ -1,7 +1,14 @@
 // reward-calculator.js - Computes verifiable rewards from game state transitions
 // Now integrated with Prima Strategy Guide curriculum for structured checkpoints
+// Enhanced with continuous progress tracking for reward shaping
 
 import { curriculumTracker } from './curriculum.js';
+import {
+    extractProgressFacts,
+    computeProgressReward,
+    getCurrentCheckpoint,
+    measureDistanceToCheckpoint
+} from './progress-tracker.js';
 
 /**
  * Reward values for different game events
@@ -50,6 +57,9 @@ export class RewardCalculator {
         this.positionStuckCount = 0;
         this.menuOpenCount = 0;
         this.lastMenuOpen = 0;
+        // Progress tracking for continuous reward shaping
+        this.prevProgressFacts = null;
+        this.currentCheckpointId = null;
     }
 
     /**
@@ -216,6 +226,39 @@ export class RewardCalculator {
             this.stepsSinceProgress = 0; // Checkpoint = progress
         }
 
+        // Continuous progress reward shaping (Layer 2: atomic facts)
+        const currFacts = extractProgressFacts(currState);
+        const currentCheckpoint = getCurrentCheckpoint(currFacts);
+
+        // Update current checkpoint target
+        if (currentCheckpoint.id !== this.currentCheckpointId) {
+            this.currentCheckpointId = currentCheckpoint.id;
+            this.prevProgressFacts = null; // Reset on checkpoint change
+        }
+
+        // Compute progress reward if we have previous facts
+        if (this.prevProgressFacts && this.currentCheckpointId) {
+            const progressReward = computeProgressReward(
+                this.prevProgressFacts,
+                currFacts,
+                this.currentCheckpointId
+            );
+
+            if (progressReward.reward !== 0) {
+                breakdown.progress = Math.round(progressReward.reward * 10) / 10;
+                breakdown.progressReason = progressReward.reason;
+                breakdown.distanceToCheckpoint = Math.round(progressReward.currDistance * 100) / 100;
+                total += breakdown.progress;
+
+                if (progressReward.improvement > 0) {
+                    this.stepsSinceProgress = 0; // Progress toward checkpoint
+                }
+            }
+        }
+
+        // Store progress facts for next iteration
+        this.prevProgressFacts = currFacts;
+
         // Store for history
         this.totalReward += total;
         if (total !== 0) {
@@ -239,6 +282,22 @@ export class RewardCalculator {
      */
     getStats() {
         const curriculumStats = curriculumTracker.getStats();
+
+        // Get current progress info
+        let progressInfo = null;
+        if (this.prevProgressFacts && this.currentCheckpointId) {
+            const checkpoint = getCurrentCheckpoint(this.prevProgressFacts);
+            const distance = measureDistanceToCheckpoint(this.prevProgressFacts, this.currentCheckpointId);
+            progressInfo = {
+                currentCheckpoint: checkpoint.description || checkpoint.id,
+                distanceToCheckpoint: distance.distance,
+                distancePercent: Math.round((1 - distance.distance) * 100),
+                gameProgress: this.prevProgressFacts.gameProgressEstimate,
+                locationOrder: this.prevProgressFacts.locationOrder,
+                region: this.prevProgressFacts.region,
+            };
+        }
+
         return {
             totalReward: this.totalReward,
             visitedMaps: this.visitedMaps.size,
@@ -253,6 +312,8 @@ export class RewardCalculator {
                 badges: curriculumStats.badges,
                 nextObjective: curriculumStats.nextCheckpoint?.name || 'Complete!',
             },
+            // Continuous progress tracking
+            progress: progressInfo,
         };
     }
 
@@ -277,6 +338,9 @@ export class RewardCalculator {
         this.stepsSinceProgress = 0;
         this.lastPosition = null;
         this.positionStuckCount = 0;
+        // Reset progress tracking
+        this.prevProgressFacts = null;
+        this.currentCheckpointId = null;
 
         if (includeCurriculum) {
             curriculumTracker.reset();
@@ -292,6 +356,27 @@ export class RewardCalculator {
             visitedMaps: Array.from(this.visitedMaps),
             caughtPokemon: Array.from(this.caughtPokemon),
             history: this.rewardHistory,
+            currentProgress: this.prevProgressFacts,
+            currentCheckpoint: this.currentCheckpointId,
         }, null, 2);
+    }
+
+    /**
+     * Get current progress facts for UI display
+     * @returns {Object|null} Progress facts
+     */
+    getProgressFacts() {
+        return this.prevProgressFacts;
+    }
+
+    /**
+     * Get current checkpoint info for UI display
+     * @returns {Object|null} Checkpoint info
+     */
+    getCurrentCheckpointInfo() {
+        if (!this.prevProgressFacts || !this.currentCheckpointId) {
+            return null;
+        }
+        return getCurrentCheckpoint(this.prevProgressFacts);
     }
 }

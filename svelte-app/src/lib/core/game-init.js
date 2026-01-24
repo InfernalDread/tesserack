@@ -275,6 +275,13 @@ function updateGameStateFromMemory() {
  * Handle agent updates
  */
 function handleAgentUpdate(update) {
+    // Get progress info from RL agent's reward calculator
+    let progressInfo = null;
+    if (rlAgentInstance?.rewardCalc) {
+        const stats = rlAgentInstance.rewardCalc.getStats();
+        progressInfo = stats.progress;
+    }
+
     updateAIState({
         objective: update.objective || '',
         objectiveHint: update.objectiveHint || '',
@@ -282,7 +289,8 @@ function handleAgentUpdate(update) {
         reasoning: update.reasoning || '',
         actions: update.action || [],
         planSource: update.selected || 'llm',
-        gameState: update.gameState || null
+        gameState: update.gameState || null,
+        progress: progressInfo
     });
 
     if (update.state) {

@@ -18,6 +18,8 @@ export const aiState = writable({
     actions: [],
     planSource: '', // 'llm' | 'neural-policy' | 'exploration'
     gameState: null, // Current game state for visibility
+    // Progress tracking
+    progress: null, // { currentCheckpoint, distancePercent, gameProgress, locationOrder, region }
 });
 
 // Statistics

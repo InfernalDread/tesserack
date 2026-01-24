@@ -2,7 +2,7 @@
     import { activeMode, aiState, stats, objectiveOverride } from '$lib/stores/agent';
     import { trainingProgress } from '$lib/stores/training';
     import { setObjectiveOverride, clearObjectiveOverride } from '$lib/core/game-init.js';
-    import { Brain, Sparkles, Target, Zap, ArrowRight, ChevronDown, ChevronUp, Eye, Lightbulb, Edit3, X } from 'lucide-svelte';
+    import { Brain, Sparkles, Target, Zap, ArrowRight, ChevronDown, ChevronUp, Eye, Lightbulb, Edit3, X, MapPin, TrendingUp } from 'lucide-svelte';
 
     $: isRunning = $activeMode !== 'idle';
 
@@ -155,6 +155,28 @@
                     {/if}
                 </div>
             </div>
+
+            {#if $aiState.progress}
+                <div class="progress-section">
+                    <div class="progress-header">
+                        <TrendingUp size={12} />
+                        <span>Progress to Checkpoint</span>
+                        <span class="progress-percent">{$aiState.progress.distancePercent}%</span>
+                    </div>
+                    <div class="checkpoint-progress-bar">
+                        <div class="checkpoint-progress-fill" style="width: {$aiState.progress.distancePercent}%"></div>
+                    </div>
+                    <div class="progress-details">
+                        <span class="region-badge">
+                            <MapPin size={10} />
+                            {$aiState.progress.region || 'unknown'}
+                        </span>
+                        <span class="game-progress">
+                            Game: {$aiState.progress.gameProgress}%
+                        </span>
+                    </div>
+                </div>
+            {/if}
         {:else}
             <button class="set-objective-btn" on:click={startEditObjective}>
                 <Target size={14} />
@@ -713,5 +735,68 @@
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
+    }
+
+    .progress-section {
+        background: var(--bg-input);
+        border-radius: var(--border-radius-sm);
+        padding: 10px;
+        margin-bottom: 12px;
+    }
+
+    .progress-header {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 11px;
+        color: var(--text-muted);
+        margin-bottom: 8px;
+    }
+
+    .progress-header :global(svg) {
+        color: var(--accent-success);
+    }
+
+    .progress-percent {
+        margin-left: auto;
+        font-weight: 600;
+        color: var(--accent-success);
+    }
+
+    .checkpoint-progress-bar {
+        height: 6px;
+        background: var(--bg-dark);
+        border-radius: 3px;
+        overflow: hidden;
+        margin-bottom: 8px;
+    }
+
+    .checkpoint-progress-fill {
+        height: 100%;
+        background: linear-gradient(90deg, var(--accent-success), #55efc4);
+        transition: width 0.5s ease;
+        border-radius: 3px;
+    }
+
+    .progress-details {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 10px;
+    }
+
+    .region-badge {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        padding: 2px 8px;
+        background: rgba(116, 185, 255, 0.15);
+        border-radius: 10px;
+        color: var(--accent-primary);
+        text-transform: capitalize;
+    }
+
+    .game-progress {
+        color: var(--text-muted);
     }
 </style>
