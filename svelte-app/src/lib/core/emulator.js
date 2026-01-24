@@ -86,6 +86,7 @@ export class Emulator {
         this.audioBuffer = null;
         this.audioEnabled = false;
         this.audioVolume = 0.5;
+        this.nextAudioTime = 0; // For scheduling audio buffers
     }
 
     /**
@@ -209,6 +210,8 @@ export class Emulator {
         if (this.audioCtx) {
             if (enabled) {
                 this.audioCtx.resume();
+                // Reset audio schedule when re-enabling
+                this.nextAudioTime = this.audioCtx.currentTime;
             } else {
                 this.audioCtx.suspend();
             }
@@ -226,10 +229,24 @@ export class Emulator {
     }
 
     /**
-     * Play audio buffer
+     * Play audio buffer with proper scheduling
      */
     playAudioBuffer() {
         if (!this.audioCtx || !this.audioEnabled || !this.audioBuffer) return;
+
+        const currentTime = this.audioCtx.currentTime;
+
+        // If we've fallen too far behind, reset the schedule
+        // This happens when emulator runs faster than real-time
+        if (this.nextAudioTime < currentTime) {
+            this.nextAudioTime = currentTime;
+        }
+
+        // Don't queue too far ahead (max ~200ms buffer)
+        // Skip this buffer if we're too far ahead
+        if (this.nextAudioTime > currentTime + 0.2) {
+            return;
+        }
 
         // Create buffer for this chunk
         const buffer = this.audioCtx.createBuffer(2, AUDIO_FRAMES, 44100);
@@ -243,11 +260,14 @@ export class Emulator {
             right[i] = view[i * 2 + 1] / 32768;
         }
 
-        // Play immediately
+        // Schedule to play at the next available time
         const source = this.audioCtx.createBufferSource();
         source.buffer = buffer;
         source.connect(this.gainNode);
-        source.start();
+        source.start(this.nextAudioTime);
+
+        // Advance the next play time by buffer duration
+        this.nextAudioTime += buffer.duration;
     }
 
     /**
