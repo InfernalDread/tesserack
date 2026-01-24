@@ -2,10 +2,11 @@
     import { activeMode } from '$lib/stores/agent';
     import { stats } from '$lib/stores/agent';
     import { modelState, trainingProgress } from '$lib/stores/training';
-    import { startWatchMode, stopAll, saveGame, loadGame, initAudio, setAudioEnabled, isAudioEnabled } from '$lib/core/game-init.js';
+    import { startWatchMode, stopAll, saveGame, loadGame, initAudio, setAudioEnabled, setVolume } from '$lib/core/game-init.js';
     import { Play, Pause, Square, Save, FolderOpen, Zap, Volume2, VolumeX } from 'lucide-svelte';
 
     let audioEnabled = false;
+    let volume = 50; // 0-100
 
     async function toggleAudio() {
         if (!audioEnabled) {
@@ -14,11 +15,17 @@
             if (success) {
                 audioEnabled = true;
                 setAudioEnabled(true);
+                setVolume(volume / 100);
             }
         } else {
             audioEnabled = false;
             setAudioEnabled(false);
         }
+    }
+
+    function handleVolumeChange(e) {
+        volume = e.target.value;
+        setVolume(volume / 100);
     }
 
     function togglePlay() {
@@ -141,6 +148,17 @@
                 <VolumeX size={16} />
             {/if}
         </button>
+        {#if audioEnabled}
+            <input
+                type="range"
+                class="volume-slider"
+                min="0"
+                max="100"
+                bind:value={volume}
+                on:input={handleVolumeChange}
+                title="Volume: {volume}%"
+            />
+        {/if}
     </div>
 </div>
 
@@ -350,5 +368,34 @@
 
     .util-btn.active:hover {
         background: #5fa8eb;
+    }
+
+    .volume-slider {
+        width: 60px;
+        height: 4px;
+        -webkit-appearance: none;
+        appearance: none;
+        background: var(--bg-dark);
+        border-radius: 2px;
+        cursor: pointer;
+    }
+
+    .volume-slider::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        appearance: none;
+        width: 12px;
+        height: 12px;
+        background: var(--accent-primary);
+        border-radius: 50%;
+        cursor: pointer;
+    }
+
+    .volume-slider::-moz-range-thumb {
+        width: 12px;
+        height: 12px;
+        background: var(--accent-primary);
+        border-radius: 50%;
+        cursor: pointer;
+        border: none;
     }
 </style>
