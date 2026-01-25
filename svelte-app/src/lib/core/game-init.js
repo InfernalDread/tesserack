@@ -8,7 +8,8 @@ import { DataCollector } from './data-collector.js';
 import { CombinedRewardSystem } from './adaptive-rewards.js';
 import { TrainedPolicy, AutoTrainingManager } from './trained-policy.js';
 import * as persistence from './persistence.js';
-import { initLLM, isReady as isLLMReady } from './llm.js';
+import { initBrowserLLM, isBrowserLLMReady, isReady as isLLMReady } from './llm.js';
+import { getConfig, PROVIDERS } from '$lib/stores/llm';
 
 // Store references
 import {
@@ -381,27 +382,50 @@ function handleAutoTrainEvent(event) {
 export async function startWatchMode() {
     if (!rlAgentInstance) return;
 
-    // Initialize LLM if not ready (first time only, shows download progress)
-    if (!isLLMReady()) {
-        feedSystem('Loading AI model (Qwen2.5-1.5B)... First time may take a minute.');
-        llmState.update(s => ({ ...s, status: 'loading', progress: 0, message: 'Initializing...' }));
+    const config = getConfig();
+    const provider = PROVIDERS[config.provider];
 
-        try {
-            await initLLM((progress) => {
-                setLLMProgress(progress);
-                // Update feed with download progress
-                if (progress.progress < 1) {
-                    const pct = Math.round(progress.progress * 100);
-                    feedSystem(`Downloading AI model: ${pct}%`);
-                }
-            });
-            setLLMReady();
-            feedSystem('AI model loaded! Starting...');
-        } catch (err) {
-            console.error('LLM initialization failed:', err);
-            setLLMError(err);
-            feedSystem('AI model failed to load. Running in exploration mode.');
+    if (config.isBrowser) {
+        // Using browser WebLLM - initialize if not ready
+        if (!isBrowserLLMReady()) {
+            feedSystem('Loading browser AI model... First time may take a minute.');
+            llmState.update(s => ({ ...s, status: 'loading', progress: 0, message: 'Initializing...' }));
+
+            try {
+                await initBrowserLLM(config.model, (progress) => {
+                    setLLMProgress(progress);
+                    if (progress.progress < 1) {
+                        const pct = Math.round(progress.progress * 100);
+                        feedSystem(`Downloading AI model: ${pct}%`);
+                    }
+                });
+                setLLMReady();
+                feedSystem('AI model loaded! Starting...');
+            } catch (err) {
+                console.error('LLM initialization failed:', err);
+                setLLMError(err);
+                feedSystem('AI model failed to load. Running in exploration mode.');
+            }
         }
+    } else {
+        // Using API provider - validate config
+        if (!config.model) {
+            feedSystem('Error: No model selected. Please configure LLM settings.');
+            setLLMError(new Error('No model configured'));
+            return;
+        }
+        if (!config.endpoint) {
+            feedSystem('Error: No endpoint configured. Please configure LLM settings.');
+            setLLMError(new Error('No endpoint configured'));
+            return;
+        }
+        if (provider?.needsKey && !config.apiKey) {
+            feedSystem(`Error: ${provider.name} requires an API key.`);
+            setLLMError(new Error('API key required'));
+            return;
+        }
+        setLLMReady();
+        feedSystem(`Using ${provider?.name || 'API'}: ${config.model}`);
     }
 
     // Start RL agent (uses LLM for planning)

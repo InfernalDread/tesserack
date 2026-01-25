@@ -13,6 +13,7 @@
     import HintInput from '$lib/components/HintInput.svelte';
     import ActivityFeed from '$lib/components/ActivityFeed.svelte';
     import AdvancedPanel from '$lib/components/AdvancedPanel.svelte';
+    import LLMConfig from '$lib/components/LLMConfig.svelte';
     import RomDropzone from '$lib/components/RomDropzone.svelte';
     import ModelStatus from '$lib/components/ModelStatus.svelte';
 
@@ -29,6 +30,8 @@
 
 <div class="app">
     <Header />
+
+    <LLMConfig />
 
     <main class="main-content">
         <div class="left-column">
@@ -58,9 +61,7 @@
         </div>
     </main>
 
-    {#if $romLoaded}
-        <AdvancedPanel />
-    {/if}
+    <AdvancedPanel />
 
     <footer class="info-footer">
         <Info size={14} />

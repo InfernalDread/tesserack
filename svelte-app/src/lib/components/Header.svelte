@@ -8,6 +8,15 @@
     let aboutOpen = false;
 
     $: hasTokenStats = $tokenStats.requestCount > 0;
+
+    // Build timestamp injected by Vite
+    const buildTime = typeof __BUILD_TIME__ !== 'undefined' ? __BUILD_TIME__ : null;
+
+    function formatBuildTime(isoString) {
+        if (!isoString) return '';
+        const date = new Date(isoString);
+        return `Updated ${date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} at ${date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZoneName: 'short' })}`;
+    }
 </script>
 
 <header class="header">
@@ -17,7 +26,12 @@
         </div>
         <div class="logo-text">
             <h1>Tesserack</h1>
-            <span class="tagline">AI Plays Pokemon</span>
+            <div class="subtitle-row">
+                <span class="tagline">AI Plays Pokemon</span>
+                {#if buildTime}
+                    <span class="build-time">{formatBuildTime(buildTime)}</span>
+                {/if}
+            </div>
         </div>
     </div>
 
@@ -141,11 +155,25 @@
         letter-spacing: -0.5px;
     }
 
+    .subtitle-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
     .tagline {
         font-size: 11px;
         color: var(--text-muted);
         text-transform: uppercase;
         letter-spacing: 1px;
+    }
+
+    .build-time {
+        font-size: 10px;
+        color: var(--text-muted);
+        opacity: 0.7;
+        padding-left: 8px;
+        border-left: 1px solid var(--border-color);
     }
 
     .header-right {
