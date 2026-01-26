@@ -71,6 +71,18 @@ class Emulator:
         """Get current screen as numpy array."""
         return np.array(self.pyboy.screen)
 
+    def get_screen_png(self) -> Optional[bytes]:
+        """Get current screen as PNG bytes for transmission."""
+        try:
+            from io import BytesIO
+            pil_image = self.pyboy.screen.image
+            buffer = BytesIO()
+            pil_image.save(buffer, format="PNG")
+            return buffer.getvalue()
+        except Exception:
+            # Pillow not installed or other error
+            return None
+
     def close(self) -> None:
         """Clean up emulator."""
         self.pyboy.stop()

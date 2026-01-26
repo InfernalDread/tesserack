@@ -172,18 +172,60 @@ SYSTEM_PROMPT = """You are playing Pokemon Red. Your goal is to complete the gam
 You will receive the current game state and must issue ONE task at a time.
 
 Available task types:
-- navigate: Go to a location (e.g., "navigate | Pewter City")
+- navigate: Go to a location (e.g., "navigate | Oak's Lab")
 - catch: Catch a Pokemon (e.g., "catch | Pikachu")
 - train: Train party to a level (e.g., "train | level 14")
 - battle: Fight a trainer/gym (e.g., "battle | Brock")
 - buy: Purchase items (e.g., "buy | 5 Potions")
 - use_item: Use an item (e.g., "use_item | Potion on Pikachu")
+- talk: Talk to an NPC (e.g., "talk | Professor Oak")
+
+IMPORTANT EARLY GAME SEQUENCE:
+1. If you have NO Pokemon, you MUST go to Oak's Lab in Pallet Town and talk to Professor Oak to get your starter
+2. After getting starter, deliver Oak's Parcel from Viridian City Mart
+3. Then you can proceed to train and battle gyms
 
 Respond with ONLY the task in this format:
 TASK: type | target | brief reason
 
 Example:
-TASK: navigate | Viridian Forest | Need to catch Pikachu for Brock fight"""
+TASK: navigate | Oak's Lab | Need to get starter Pokemon from Professor Oak"""
+
+
+# Map ID to location name mapping for Pokemon Red
+MAP_NAMES = {
+    0: "Pallet Town",
+    1: "Viridian City",
+    2: "Pewter City",
+    3: "Cerulean City",
+    12: "Route 1",
+    13: "Route 2",
+    14: "Route 3",
+    33: "Route 22",
+    37: "Red's House 1F",
+    38: "Red's House 2F",
+    39: "Blue's House",
+    40: "Oak's Lab",
+    41: "Viridian Pokemon Center",
+    42: "Viridian Mart",
+    43: "Viridian School",
+    44: "Viridian House",
+    51: "Viridian Forest",
+    52: "Pewter Museum 1F",
+    54: "Pewter Gym",
+    55: "Pewter House 1",
+    56: "Pewter Mart",
+    57: "Pewter House 2",
+    58: "Pewter Pokemon Center",
+    59: "Mt. Moon 1F",
+    60: "Mt. Moon B1F",
+    61: "Mt. Moon B2F",
+    65: "Cerulean House 1",
+    66: "Cerulean Pokemon Center",
+    67: "Cerulean Gym",
+    68: "Cerulean Bike Shop",
+    69: "Cerulean Mart",
+}
 
 
 class Planner:
@@ -242,8 +284,9 @@ class Planner:
         parts.append("")
 
         # Game state
+        location_name = MAP_NAMES.get(state.map_id, f"Unknown Area (Map {state.map_id})")
         parts.append("GAME STATE:")
-        parts.append(f"- Location: Map {state.map_id} ({state.player_x}, {state.player_y})")
+        parts.append(f"- Location: {location_name} ({state.player_x}, {state.player_y})")
         parts.append(f"- Party: {state.party_summary()}")
         parts.append(f"- Badges: {state.badge_count}/8")
         parts.append(f"- Money: ${state.money}")
@@ -278,5 +321,24 @@ class Planner:
 
     def _get_strategy_hint(self, state: GameState, objective: str) -> str:
         """Get relevant hint from strategy guide."""
-        # TODO: Implement strategy guide lookup
+        # Early game hints
+        if len(state.party) == 0:
+            if state.map_id in [37, 38]:  # Red's House
+                return "You're in your house. Go downstairs and head south to Oak's Lab to get your starter Pokemon."
+            elif state.map_id == 0:  # Pallet Town
+                return "You're in Pallet Town. Oak's Lab is the large building at the south of town. Go there to get your starter."
+            elif state.map_id == 40:  # Oak's Lab
+                return "You're in Oak's Lab! Talk to Professor Oak and choose a starter Pokemon from the Pokeballs on the table."
+            else:
+                return "You have no Pokemon! You must return to Pallet Town and visit Oak's Lab to get your starter."
+
+        # After getting starter
+        if state.badge_count == 0 and len(state.party) > 0:
+            if state.map_id == 40:  # Oak's Lab
+                return "Now head north through Route 1 to Viridian City to get Oak's Parcel from the Mart."
+            elif state.map_id in [0, 12]:  # Pallet/Route 1
+                return "Head north to Viridian City. The Mart there has Oak's Parcel."
+            elif state.map_id in [1, 41, 42]:  # Viridian area
+                return "Get Oak's Parcel from the Mart, then return it to Oak. After that, head to Pewter City for the first gym."
+
         return ""

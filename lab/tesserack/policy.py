@@ -110,7 +110,11 @@ class PolicyNetwork:
     ) -> str:
         """Select action using epsilon-greedy policy."""
         if random.random() < epsilon:
-            return random.choice(ACTIONS)
+            # Bias exploration toward movement (70% movement, 30% other)
+            if random.random() < 0.7:
+                return random.choice(["up", "down", "left", "right"])
+            else:
+                return random.choice(["a", "b", "start", "select", "none"])
 
         state_enc = self.encode_state(state)
         task_enc = self.encode_task(task)

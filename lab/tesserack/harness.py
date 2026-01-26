@@ -11,21 +11,28 @@ from .llm import Planner, OllamaBackend, OpenAIBackend, LlamaCppBackend, LLMConf
 from .policy import PolicyNetwork, Experience, ACTION_TO_IDX
 from .metrics import MetricsLogger
 from .config import ExperimentConfig, CHECKPOINTS
+from .server import LabServerSync
 
 
 class Harness:
     """Main experiment harness."""
 
-    def __init__(self, config: ExperimentConfig):
+    def __init__(self, config: ExperimentConfig, enable_server: bool = False):
         self.config = config
         self.total_steps = 0
         self.current_checkpoint = 0
+        self.enable_server = enable_server
 
         # Initialize components
         self._init_emulator()
         self._init_llm()
         self._init_policy()
         self._init_metrics()
+
+        if enable_server:
+            self._init_server()
+        else:
+            self.server = None
 
         # Task management
         self.task_checker = TaskChecker()
@@ -87,6 +94,16 @@ class Harness:
         runs_dir = Path(self.config.runs_dir)
         self.metrics = MetricsLogger(runs_dir, self.config.to_dict())
 
+    def _init_server(self):
+        """Initialize WebSocket server for browser UI."""
+        self.server = LabServerSync()
+        self.server.start()
+        self.server.update_status(
+            experiment_name=self.config.name,
+            is_running=True,
+        )
+        print(f"WebSocket server started on ws://localhost:8765")
+
     def run(self) -> bool:
         """Run the main loop until target or max steps reached."""
         print(f"Starting experiment: {self.config.name}")
@@ -96,6 +113,11 @@ class Harness:
 
         try:
             while self.total_steps < self.config.max_steps:
+                # Check pause/speed from server
+                if self.server:
+                    while self.server.should_pause():
+                        time.sleep(0.1)
+
                 # Check if we've reached target
                 if self._check_target_reached():
                     self._finalize(success=True)
@@ -103,6 +125,13 @@ class Harness:
 
                 # Get current state
                 state = self.state_reader.read()
+
+                # Send frame and state to connected clients (throttled to ~10fps)
+                if self.server and self.total_steps % 6 == 0:
+                    frame_data = self.emulator.get_screen_png()
+                    if frame_data:
+                        self.server.send_frame(frame_data)
+                    self.server.send_state(state.to_dict())
 
                 # Check for death/whiteout (simplified: check if in Pallet with no badges expected)
                 if self._check_death(state):
@@ -122,6 +151,14 @@ class Harness:
                     loss = self.policy.train_step(self.config.policy.batch_size)
                     if loss > 0:
                         print(f"  [TRAIN] Loss: {loss:.4f}")
+
+                # Periodic metrics broadcast
+                if self.server and self.total_steps % 10 == 0:
+                    self.server.send_metrics({
+                        "total_steps": self.total_steps,
+                        "epsilon": self.epsilon,
+                        "checkpoint": self.current_checkpoint,
+                    })
 
                 # Decay epsilon
                 self.epsilon = max(
@@ -150,6 +187,12 @@ class Harness:
             failure_context = f"Previous task '{self.current_task.to_prompt()}' failed after {self.current_task.steps_taken} steps"
 
         print(f"\n[LLM] Requesting task for: {objective}")
+
+        # Notify clients of LLM request
+        if self.server:
+            prompt_preview = f"State: {state.location}, Party: {len(state.party)} Pokemon"
+            self.server.send_llm_request(prompt_preview, objective)
+
         response = self.planner.get_next_task(state, objective, failure_context)
         print(f"[LLM] Response: {response[:100]}...")
 
@@ -160,8 +203,24 @@ class Harness:
             self.current_task = task
             self.replan_count = 0
             print(f"[TASK] {task.to_prompt()} (budget: {task.budget})")
+
+            # Notify clients of LLM response and new task
+            if self.server:
+                self.server.send_llm_response(response, {
+                    "type": task.type.value,
+                    "target": task.target,
+                })
+                self.server.send_task_update(
+                    task_type=task.type.value,
+                    target=task.target,
+                    status="active",
+                    steps=0,
+                    budget=task.budget,
+                )
         else:
             print("[WARN] Failed to parse task from LLM response")
+            if self.server:
+                self.server.send_llm_response(response, None)
 
     def _execute_task_step(self, state: GameState):
         """Execute one step of the current task."""
@@ -181,6 +240,16 @@ class Harness:
                 success=True,
                 steps=task.steps_taken,
             )
+
+            # Notify clients
+            if self.server:
+                self.server.send_task_update(
+                    task_type=task.type.value,
+                    target=task.target,
+                    status="completed",
+                    steps=task.steps_taken,
+                    budget=task.budget,
+                )
 
             # Check for checkpoint advancement
             self._check_checkpoint(state)
@@ -204,6 +273,16 @@ class Harness:
                 steps=task.steps_taken,
                 failure_reason="Budget exceeded",
             )
+
+            # Notify clients
+            if self.server:
+                self.server.send_task_update(
+                    task_type=task.type.value,
+                    target=task.target,
+                    status="failed",
+                    steps=task.steps_taken,
+                    budget=task.budget,
+                )
             return
 
         # Get action from policy network
@@ -300,6 +379,10 @@ class Harness:
                             deaths=self.metrics.run_metrics.total_deaths,
                         )
 
+                        # Notify clients
+                        if self.server:
+                            self.server.send_checkpoint(cp["id"], cp["name"])
+
                         # Save checkpoint state
                         if self.config.save_checkpoints:
                             self._save_checkpoint_state(cp["id"])
@@ -340,6 +423,11 @@ class Harness:
                 for p in state.party
             ],
         )
+
+        # Notify clients and stop server
+        if self.server:
+            self.server.update_status(is_running=False)
+            self.server.stop()
 
         # Save final policy weights
         weights_path = Path(self.config.runs_dir) / f"{self.metrics.run_id}_policy.npz"

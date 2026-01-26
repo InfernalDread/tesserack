@@ -91,6 +91,34 @@ class GameState:
             for p in self.party
         )
 
+    @property
+    def location(self) -> str:
+        """Human-readable location string."""
+        return f"Map {self.map_id} ({self.player_x}, {self.player_y})"
+
+    def to_dict(self) -> dict:
+        """Convert to dictionary for JSON serialization."""
+        return {
+            "map_id": self.map_id,
+            "player_x": self.player_x,
+            "player_y": self.player_y,
+            "location": self.location,
+            "party": [
+                {
+                    "species_id": p.species_id,
+                    "level": p.level,
+                    "current_hp": p.current_hp,
+                    "max_hp": p.max_hp,
+                }
+                for p in self.party
+            ],
+            "badges": self.badges,
+            "badge_count": self.badge_count,
+            "money": self.money,
+            "in_battle": self.in_battle,
+            "enemy_hp": self.enemy_hp,
+        }
+
 
 class StateReader:
     """Reads game state from emulator memory."""

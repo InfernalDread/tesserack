@@ -62,6 +62,11 @@ def main():
         action="store_true",
         help="Show game window",
     )
+    parser.add_argument(
+        "--server",
+        action="store_true",
+        help="Start WebSocket server for browser UI (ws://localhost:8765)",
+    )
 
     args = parser.parse_args()
 
@@ -80,7 +85,7 @@ def main():
         config.llm.backend = args.backend
 
     # Run experiment
-    harness = Harness(config)
+    harness = Harness(config, enable_server=args.server)
     success = harness.run()
 
     sys.exit(0 if success else 1)
