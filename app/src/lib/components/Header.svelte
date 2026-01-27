@@ -343,18 +343,20 @@
 
         <h3>Causal Chain</h3>
         <table class="causal-table">
-            <tr>
-                <td><strong>Immediate</strong></td>
-                <td>pressButton() sets input bits in emulator memory-mapped I/O, held for 12 frames</td>
-            </tr>
-            <tr>
-                <td><strong>Behavioral</strong></td>
-                <td>Epsilon-greedy: 30% random (decaying to 5%), otherwise sample from softmax(policy(state))</td>
-            </tr>
-            <tr>
-                <td><strong>Systemic</strong></td>
-                <td>Currently: no learning. Rewards computed but policy weights never updated. Pure exploration with reward tracking.</td>
-            </tr>
+            <tbody>
+                <tr>
+                    <td><strong>Immediate</strong></td>
+                    <td>pressButton() sets input bits in emulator memory-mapped I/O, held for 12 frames</td>
+                </tr>
+                <tr>
+                    <td><strong>Behavioral</strong></td>
+                    <td>Epsilon-greedy: 30% random (decaying to 5%), otherwise sample from softmax(policy(state))</td>
+                </tr>
+                <tr>
+                    <td><strong>Systemic</strong></td>
+                    <td>Currently: no learning. Rewards computed but policy weights never updated. Pure exploration with reward tracking.</td>
+                </tr>
+            </tbody>
         </table>
 
         <h3>Roadmap</h3>
