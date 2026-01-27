@@ -328,38 +328,45 @@
         <h2>How It Works</h2>
 
         <p>
-            Tesserack runs a complete AI system <strong>entirely in your browser</strong>. No server, no API calls, no data leaves your machine.
+            Tesserack runs <strong>entirely in your browser</strong>. No server, no API calls, no data leaves your machine. Two modes are available:
         </p>
 
-        <h3>Architecture</h3>
-        <ul>
-            <li><strong>Emulator:</strong> <a href="https://github.com/nicutor/nicutor.github.io" target="_blank" rel="noopener">binjgb</a> (WebAssembly GameBoy emulator)</li>
-            <li><strong>LLM:</strong> Qwen2.5-1.5B via <a href="https://github.com/nicutor/nicutor.github.io" target="_blank" rel="noopener">WebLLM</a> (WebGPU-accelerated inference)</li>
-            <li><strong>Policy Network:</strong> TensorFlow.js (learns from gameplay experiences)</li>
-            <li><strong>Memory Reading:</strong> Direct RAM access to game state (badges, party, location, items)</li>
+        <h3>LLM Mode</h3>
+        <p>
+            Language model (WebLLM or external API) generates action plans based on game state and strategy guide context. Policy network selects and executes plans.
+        </p>
+
+        <h3>Pure RL Mode</h3>
+        <p>
+            Each step, the agent reads game memory to get the current state, encodes it as a 16-number vector, passes it through a small neural network to get action preferences, picks an action (mostly random at first, increasingly policy-driven over time), executes it for ~48 frames, then scores the resulting state change using deterministic tests. Movement scores +0.1, entering a new map scores +1-2, major milestones like badges score +5-10, and getting stuck incurs penalties.
+        </p>
+
+        <h3>Causal Chain</h3>
+        <table class="causal-table">
+            <tr>
+                <td><strong>Immediate</strong></td>
+                <td>pressButton() sets input bits in emulator memory-mapped I/O, held for 12 frames</td>
+            </tr>
+            <tr>
+                <td><strong>Behavioral</strong></td>
+                <td>Epsilon-greedy: 30% random (decaying to 5%), otherwise sample from softmax(policy(state))</td>
+            </tr>
+            <tr>
+                <td><strong>Systemic</strong></td>
+                <td>Currently: no learning. Rewards computed but policy weights never updated. Pure exploration with reward tracking.</td>
+            </tr>
+        </table>
+
+        <h3>Roadmap</h3>
+        <ul class="roadmap">
+            <li class="done">Deterministic unit-test reward system</li>
+            <li class="done">Browser-native Pure RL mode</li>
+            <li class="done">Real-time reward breakdown UI</li>
+            <li class="todo">Policy gradient updates (REINFORCE)</li>
+            <li class="todo">Experience replay buffer</li>
+            <li class="todo">Checkpoint-based curriculum shaping</li>
+            <li class="todo">Reach Boulder Badge without LLM</li>
         </ul>
-
-        <h3>The Loop</h3>
-        <ol>
-            <li>Read game state from emulator memory</li>
-            <li>LLM generates 3 candidate action plans based on current objective</li>
-            <li>Policy network + heuristics select the best plan</li>
-            <li>Execute actions, observe reward, store experience</li>
-            <li>Periodically train policy network on collected experiences</li>
-        </ol>
-
-        <h3>Curriculum</h3>
-        <p>
-            Objectives are extracted from <strong>Prima's Official Strategy Guide (1999)</strong>.
-            The guide defines 47 ordered checkpoints from Pallet Town to the Hall of Fame.
-            The LLM sees the next checkpoint in its prompt; the reward system gives bonuses for completing them.
-        </p>
-
-        <h3>What Gets Stored</h3>
-        <p>
-            Everything persists in IndexedDB and localStorage: experiences, trained model weights,
-            checkpoint progress, game saves. The Qwen model (~1.5GB) is cached by your browser after first download.
-        </p>
 
         <div class="about-footer">
             <a href="https://github.com/sidmohan0/tesserack" target="_blank" rel="noopener" class="github-link">
@@ -557,6 +564,51 @@
 
     .about-panel a:hover {
         text-decoration: underline;
+    }
+
+    .causal-table {
+        width: 100%;
+        font-size: 12px;
+        border-collapse: collapse;
+        margin: 8px 0;
+    }
+
+    .causal-table td {
+        padding: 6px 8px;
+        border-bottom: 1px solid var(--border-color);
+        vertical-align: top;
+    }
+
+    .causal-table td:first-child {
+        width: 80px;
+        color: var(--text-muted);
+    }
+
+    .roadmap {
+        list-style: none;
+        padding-left: 0;
+    }
+
+    .roadmap li {
+        padding: 4px 0 4px 20px;
+        position: relative;
+        font-size: 12px;
+    }
+
+    .roadmap li::before {
+        position: absolute;
+        left: 0;
+        font-size: 11px;
+    }
+
+    .roadmap li.done::before {
+        content: "\2713";
+        color: #00b894;
+    }
+
+    .roadmap li.todo::before {
+        content: "\25CB";
+        color: var(--text-muted);
     }
 
     .about-footer {
