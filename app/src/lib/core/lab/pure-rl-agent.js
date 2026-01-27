@@ -373,6 +373,60 @@ export class PureRLAgent {
         encodeStateInto(state, stateVec);
         return this.core.getProbs(stateVec);
     }
+
+    /**
+     * Update hyperparameters. Takes effect on next rollout boundary.
+     * @param {Object} newConfig - { learningRate, rolloutSize, gamma }
+     */
+    updateConfig(newConfig) {
+        const needsBufferResize = newConfig.rolloutSize && newConfig.rolloutSize !== this.config.rolloutSize;
+
+        // Update local config
+        if (newConfig.learningRate !== undefined) {
+            this.config.learningRate = newConfig.learningRate;
+        }
+        if (newConfig.gamma !== undefined) {
+            this.config.gamma = newConfig.gamma;
+        }
+        if (newConfig.rolloutSize !== undefined) {
+            this.config.rolloutSize = newConfig.rolloutSize;
+        }
+
+        // Update core's learning rate (takes effect immediately)
+        if (newConfig.learningRate !== undefined) {
+            this.core.learningRate = newConfig.learningRate;
+        }
+        if (newConfig.gamma !== undefined) {
+            this.core.gamma = newConfig.gamma;
+        }
+
+        // If rollout size changed, need to recreate core (buffer resizing)
+        if (needsBufferResize) {
+            // Preserve current policy weights
+            const oldPolicy = this.core.policy;
+
+            // Create new core with new buffer size
+            this.core = new ReinforceCore({
+                stateSize: 16,
+                numActions: ACTIONS.length,
+                rolloutSize: this.config.rolloutSize,
+                learningRate: this.config.learningRate,
+                gamma: this.config.gamma,
+                normalizeReturns: this.config.normalizeReturns,
+            });
+
+            // Copy weights from old policy
+            this.core.policy.W1.set(oldPolicy.W1);
+            this.core.policy.b1.set(oldPolicy.b1);
+            this.core.policy.W2.set(oldPolicy.W2);
+            this.core.policy.b2.set(oldPolicy.b2);
+
+            // Reconnect runner
+            this.runner = new RLRunner(this.core, this.env);
+        }
+
+        console.log('[PureRLAgent] Config updated:', this.config);
+    }
 }
 
 export default PureRLAgent;

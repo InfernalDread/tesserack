@@ -20,7 +20,8 @@ import {
     labMetrics,
     updateLocation,
     recordStep,
-    loadWalkthroughGraph
+    loadWalkthroughGraph,
+    rlConfig
 } from '$lib/stores/lab';
 import { gameState, updateGameState } from '$lib/stores/game';
 
@@ -52,6 +53,13 @@ export const pureRLMetrics = writable({
     bufferSize: 128,
     avgRawReturn: 0,
     policyEntropy: 0,
+    // Chart history (rolling window of last 50 rollouts)
+    history: {
+        returns: [],    // { step, value }[]
+        entropy: [],    // { step, value }[]
+        rewards: [],    // { step, t1, t2, t3, penalties }[]
+    },
+    maxHistoryLength: 50,
 });
 
 /**
@@ -107,19 +115,52 @@ function handleLabAgentUpdate(update) {
  */
 function handlePureRLStep(stepData) {
     // Update pure RL metrics store
-    pureRLMetrics.set({
-        step: stepData.step,
-        action: stepData.action,
-        reward: stepData.reward,
-        totalReward: stepData.totalReward,
-        breakdown: stepData.breakdown,
-        firedTests: stepData.firedTests,
-        // Training metrics
-        trainSteps: stepData.trainSteps ?? 0,
-        bufferFill: stepData.bufferFill ?? 0,
-        bufferSize: stepData.bufferSize ?? 128,
-        avgRawReturn: stepData.avgRawReturn ?? 0,
-        policyEntropy: stepData.policyEntropy ?? 0,
+    pureRLMetrics.update(prev => {
+        const newMetrics = {
+            step: stepData.step,
+            action: stepData.action,
+            reward: stepData.reward,
+            totalReward: stepData.totalReward,
+            breakdown: stepData.breakdown,
+            firedTests: stepData.firedTests,
+            // Training metrics
+            trainSteps: stepData.trainSteps ?? 0,
+            bufferFill: stepData.bufferFill ?? 0,
+            bufferSize: stepData.bufferSize ?? 128,
+            avgRawReturn: stepData.avgRawReturn ?? 0,
+            policyEntropy: stepData.policyEntropy ?? 0,
+            // Preserve history
+            history: prev.history,
+            maxHistoryLength: prev.maxHistoryLength,
+        };
+
+        // Append to history on training update (when trainSteps increases)
+        if (stepData.trainSteps > prev.trainSteps) {
+            const maxLen = prev.maxHistoryLength;
+            const step = stepData.trainSteps;
+
+            // Returns history
+            const returns = [...prev.history.returns, { step, value: stepData.avgRawReturn ?? 0 }];
+            if (returns.length > maxLen) returns.shift();
+
+            // Entropy history
+            const entropy = [...prev.history.entropy, { step, value: stepData.policyEntropy ?? 0 }];
+            if (entropy.length > maxLen) entropy.shift();
+
+            // Rewards breakdown history (cumulative from breakdown)
+            const rewards = [...prev.history.rewards, {
+                step,
+                t1: stepData.breakdown?.tier1 ?? 0,
+                t2: stepData.breakdown?.tier2 ?? 0,
+                t3: stepData.breakdown?.tier3 ?? 0,
+                penalties: stepData.breakdown?.penalties ?? 0,
+            }];
+            if (rewards.length > maxLen) rewards.shift();
+
+            newMetrics.history = { returns, entropy, rewards };
+        }
+
+        return newMetrics;
     });
 
     // Update game state
@@ -434,6 +475,12 @@ export function resetLab() {
         bufferSize: 128,
         avgRawReturn: 0,
         policyEntropy: 0,
+        history: {
+            returns: [],
+            entropy: [],
+            rewards: [],
+        },
+        maxHistoryLength: 50,
     });
 }
 
@@ -457,6 +504,17 @@ export function getLabInstances() {
  */
 export function isLabInitialized() {
     return isInitialized;
+}
+
+/**
+ * Update RL agent configuration (hyperparameters)
+ * @param {Object} config - { learningRate, rolloutSize, gamma }
+ */
+export function updateRLConfig(config) {
+    if (labPureRLAgent) {
+        labPureRLAgent.updateConfig(config);
+        feedSystem(`Config updated: LR=${config.learningRate}, Rollout=${config.rolloutSize}, γ=${config.gamma}`);
+    }
 }
 
 /**

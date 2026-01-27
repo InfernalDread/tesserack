@@ -1,33 +1,42 @@
 <script>
     import { onMount, onDestroy } from 'svelte';
-    import { Map, Target, Zap, Settings, Play, Pause, RotateCcw, FlaskConical, Save, FolderOpen, SkipForward, Circle, Square, FastForward, StepForward, Brain } from 'lucide-svelte';
-    import WalkthroughGraph from './WalkthroughGraph.svelte';
-    import ExperimentRunner from './ExperimentRunner.svelte';
+    import { Play, Pause, RotateCcw, Save, FolderOpen, FastForward, SkipForward, ChevronDown } from 'lucide-svelte';
     import LabCanvas from './LabCanvas.svelte';
+    import ModeToggle from './ModeToggle.svelte';
+    import HyperparamsPopover from './HyperparamsPopover.svelte';
+    import MetricsChart from './MetricsChart.svelte';
+    import RewardBar from './RewardBar.svelte';
     import {
         walkthroughGraph,
         currentGraphLocation,
-        nextGraphLocation,
         completedObjectives,
-        selectedNode,
-        labConfig,
         labMetrics,
         graphStats,
         completionPercentage,
         loadWalkthroughGraph,
-        resetMetrics
+        resetMetrics,
+        rlConfig
     } from '$lib/stores/lab';
-    import { startLabAgent, stopLabAgent, resetLab, getLabInstances, setLabSpeed, stepLabAgent, setLabMode, labMode, pureRLMetrics } from '$lib/core/lab/lab-init.js';
+    import {
+        startLabAgent,
+        stopLabAgent,
+        resetLab,
+        getLabInstances,
+        setLabSpeed,
+        stepLabAgent,
+        setLabMode,
+        labMode,
+        pureRLMetrics,
+        updateRLConfig
+    } from '$lib/core/lab/lab-init.js';
     import { feedSystem } from '$lib/stores/feed';
 
-    let graphComponent;
     let isRunning = false;
-    let showConfig = false;
-    let showExperiments = false;
     let labInitialized = false;
+    let hyperparamsOpen = false;
 
-    // Pure RL mode - no LLM calls, deterministic rewards only
-    $: isPureRLMode = $labMode === 'purerl';
+    // Mode: 'play' (LLM) or 'train' (RL)
+    $: mode = $labMode === 'purerl' ? 'train' : 'play';
 
     // Playback controls
     let playbackSpeed = 1;
@@ -37,269 +46,70 @@
     let savedStates = [];
     let showSaveStates = false;
 
-    // Recording
-    let isRecording = false;
-    let recordings = [];
+    // Algorithm options (for future PPO etc)
+    const algorithms = [
+        { id: 'reinforce', label: 'REINFORCE' },
+        // { id: 'ppo', label: 'PPO' }, // Future
+    ];
+    let selectedAlgorithm = 'reinforce';
+    let showAlgorithmDropdown = false;
 
-    // LLM Instructions visibility (expanded by default)
-    let showLLMInstructions = true;
+    // Guide context for Play mode
+    $: guideContext = buildGuideContext($currentGraphLocation, $walkthroughGraph, $completedObjectives);
 
-    // System prompt (from rl-agent.js)
-    const SYSTEM_PROMPT = `You are playing Pokemon Red. Generate action sequences to make PROGRESS.
-
-CONTROLS: up, down, left, right, a, b
-- Movement: up/down/left/right to walk
-- 'a': confirm, talk, interact, advance text
-- 'b': cancel, exit menus
-
-CRITICAL RULES:
-1. If showing dialog/text: press 'a' 2-3 times to advance, then MOVE
-2. If in a building: navigate to exit (usually down then through door)
-3. If outdoors: move toward your next objective location
-4. VARIETY IS KEY: each plan must have DIFFERENT movement directions
-5. Always include movement (up/down/left/right), don't just spam 'a'
-
-OUTPUT FORMAT:
-PLAN1: <what you're trying to do>
-ACTIONS1: btn1, btn2, btn3, btn4, btn5, btn6, btn7, btn8, btn9, btn10
-...`;
-
-    // Map interior game locations to their parent walkthrough location
-    const locationToParent = {
-        // Pallet Town
-        'PLAYERS HOUSE 1F': 'Pallet Town',
-        'PLAYERS HOUSE 2F': 'Pallet Town',
-        'RIVALS HOUSE': 'Pallet Town',
-        'OAKS LAB': 'Pallet Town',
-        "PROF. OAK'S LAB": 'Pallet Town',
-        'PROF OAKS LAB': 'Pallet Town',
-        'PALLET TOWN': 'Pallet Town',
-        // Route 1
-        'ROUTE 1': 'Route 1',
-        // Viridian City
-        'VIRIDIAN CITY': 'Viridian City',
-        'VIRIDIAN POKEMON CENTER': 'Viridian City',
-        'VIRIDIAN POKEMART': 'Viridian City',
-        'VIRIDIAN GYM': 'Viridian City',
-        // Viridian Forest / Route 2
-        'VIRIDIAN FOREST': 'Viridian Forest',
-        'ROUTE 2': 'Route 2',
-        // Pewter City
-        'PEWTER CITY': 'Pewter City',
-        'PEWTER POKEMON CENTER': 'Pewter City',
-        'PEWTER POKEMART': 'Pewter City',
-        'PEWTER GYM': 'Pewter City',
-        'PEWTER MUSEUM': 'Pewter City',
-        // Mt Moon / Route 3-4
-        'ROUTE 3': 'Route 3',
-        'MT MOON 1F': 'Mt. Moon',
-        'MT MOON B1F': 'Mt. Moon',
-        'MT MOON B2F': 'Mt. Moon',
-        'ROUTE 4': 'Route 4',
-        // Cerulean City
-        'CERULEAN CITY': 'Cerulean City',
-        'CERULEAN POKEMON CENTER': 'Cerulean City',
-        'CERULEAN POKEMART': 'Cerulean City',
-        'CERULEAN GYM': 'Cerulean City',
-        'CERULEAN BIKE SHOP': 'Cerulean City',
-        // Routes around Cerulean
-        'ROUTE 24': 'Route 24',
-        'ROUTE 25': 'Route 25',
-        'ROUTE 5': 'Route 5',
-        'ROUTE 6': 'Route 6',
-        // Vermilion City
-        'VERMILION CITY': 'Vermilion City',
-        'VERMILION POKEMON CENTER': 'Vermilion City',
-        'VERMILION POKEMART': 'Vermilion City',
-        'VERMILION GYM': 'Vermilion City',
-        'SS ANNE': 'Vermilion City',
-        'S.S. ANNE': 'Vermilion City',
-        // Celadon
-        'CELADON CITY': 'Celadon City',
-        'CELADON GYM': 'Celadon City',
-        'CELADON DEPT STORE': 'Celadon City',
-        'GAME CORNER': 'Celadon City',
-        'ROCKET HIDEOUT': 'Celadon City',
-        // Lavender
-        'LAVENDER TOWN': 'Lavender Town',
-        'POKEMON TOWER': 'Pokemon Tower',
-        // Saffron
-        'SAFFRON CITY': 'Saffron City',
-        'SAFFRON GYM': 'Saffron City',
-        'SILPH CO': 'Saffron City',
-        // Fuchsia
-        'FUCHSIA CITY': 'Fuchsia City',
-        'FUCHSIA GYM': 'Fuchsia City',
-        'SAFARI ZONE': 'Safari Zone',
-        // Cinnabar
-        'CINNABAR ISLAND': 'Cinnabar Island',
-        'CINNABAR GYM': 'Cinnabar Island',
-        'POKEMON MANSION': 'Cinnabar Island',
-        // Victory Road / Pokemon League
-        'VICTORY ROAD': 'Victory Road',
-        'INDIGO PLATEAU': 'Indigo Plateau',
-        'POKEMON LEAGUE': 'Indigo Plateau',
-    };
-
-    function mapGameLocationToParent(locationName) {
-        if (!locationName) return null;
-        const upper = locationName.toUpperCase();
-
-        // Direct match
-        if (locationToParent[upper]) {
-            return locationToParent[upper];
-        }
-
-        // Partial match - check if location contains a known key
-        for (const [key, parent] of Object.entries(locationToParent)) {
-            if (upper.includes(key) || key.includes(upper)) {
-                return parent;
-            }
-        }
-
-        // Try to extract city/town name from location
-        const cityMatch = locationName.match(/(PALLET|VIRIDIAN|PEWTER|CERULEAN|VERMILION|CELADON|SAFFRON|LAVENDER|FUCHSIA|CINNABAR)/i);
-        if (cityMatch) {
-            const cityName = cityMatch[1].charAt(0).toUpperCase() + cityMatch[1].slice(1).toLowerCase();
-            return `${cityName} ${locationName.toLowerCase().includes('town') ? 'Town' : 'City'}`;
-        }
-
-        // Return original if no mapping
-        return locationName;
-    }
-
-    // Build guide context for display (mirrors guide-agent.js logic)
-    $: guideContext = buildGuideContextDisplay($currentGraphLocation, $walkthroughGraph, $completedObjectives);
-
-    function buildGuideContextDisplay(locationName, graph, completed) {
+    function buildGuideContext(locationName, graph, completed) {
         if (!graph?.nodes?.length || !locationName) return null;
 
-        // Map game location to parent walkthrough location
-        const mappedLocation = mapGameLocationToParent(locationName);
-
-        // Try exact match first
-        let location = graph.nodes.find(n =>
+        const location = graph.nodes.find(n =>
             n.type === 'location' &&
-            n.name.toLowerCase() === mappedLocation?.toLowerCase()
+            (n.name.toLowerCase() === locationName.toLowerCase() ||
+             n.name.toLowerCase().includes(locationName.toLowerCase()))
         );
-
-        // Fallback: partial match
-        if (!location && mappedLocation) {
-            location = graph.nodes.find(n =>
-                n.type === 'location' &&
-                (n.name.toLowerCase().includes(mappedLocation.toLowerCase()) ||
-                 mappedLocation.toLowerCase().includes(n.name.toLowerCase()))
-            );
-        }
 
         if (!location) return null;
 
-        const context = {
+        const objectives = [];
+        for (const edge of graph.edges) {
+            if (edge.from === location.id && edge.type === 'contains') {
+                const target = graph.nodes.find(n => n.id === edge.to);
+                if (target?.type === 'objective' && !completed.has(target.name)) {
+                    objectives.push(target);
+                }
+            }
+        }
+
+        return {
             location: location.name,
             description: location.description || '',
-            objectives: [],
-            items: [],
-            connections: [],
-            trainers: []
+            objectives: objectives.slice(0, 4)
         };
-
-        for (const edge of graph.edges) {
-            if (edge.from !== location.id) continue;
-
-            const target = graph.nodes.find(n => n.id === edge.to);
-            if (!target) continue;
-
-            switch (edge.type) {
-                case 'contains':
-                    if (target.type === 'objective' && !completed.has(target.name)) {
-                        context.objectives.push(target);
-                    } else if (target.type === 'item') {
-                        context.items.push(target);
-                    }
-                    break;
-                case 'leads_to':
-                    context.connections.push({ ...target, method: edge.method });
-                    break;
-                case 'has_trainer':
-                    context.trainers.push(target);
-                    break;
-            }
-        }
-
-        return context;
-    }
-
-    // Build preview of full prompt sent to LLM
-    function buildFullPromptPreview(location, guide) {
-        const lines = [];
-
-        // Guide context (if available)
-        if (guide) {
-            lines.push(`[STRATEGY GUIDE - ${guide.location}]`);
-            if (guide.description) {
-                lines.push(guide.description);
-            }
-            if (guide.objectives?.length > 0) {
-                lines.push('\nObjectives here:');
-                guide.objectives.slice(0, 2).forEach(o => {
-                    lines.push(`- ${o.name}`);
-                });
-            }
-            lines.push('');
-        }
-
-        // Current situation
-        lines.push('=== CURRENT SITUATION ===');
-        lines.push(`Location: ${location || 'Unknown'}`);
-        lines.push('Position: (x, y)');
-
-        // Add action hint based on location
-        const locUpper = (location || '').toUpperCase();
-        if (locUpper.includes('HOUSE') && locUpper.includes('2F')) {
-            lines.push('ACTION NEEDED: Go downstairs - walk DOWN');
-        } else if (locUpper.includes('HOUSE')) {
-            lines.push('ACTION NEEDED: Exit house - walk DOWN to door');
-        } else {
-            lines.push('ACTION NEEDED: Navigate toward objective');
-        }
-
-        lines.push('');
-        lines.push('=== OBJECTIVE ===');
-        lines.push('[From curriculum tracker]');
-        lines.push(`Progress: ${$completionPercentage}% | Badges: 0/8`);
-        lines.push('');
-        lines.push('Generate 3 action plans with DIFFERENT directions:');
-
-        return lines.join('\n');
     }
 
     onMount(async () => {
         await loadWalkthroughGraph();
-        // Load saved states from localStorage
+        // Load saved states
         try {
             const stored = localStorage.getItem('tesserack_lab_states');
             if (stored) savedStates = JSON.parse(stored);
         } catch (e) {}
-        // Load recordings
-        try {
-            const stored = localStorage.getItem('tesserack_lab_recordings');
-            if (stored) recordings = JSON.parse(stored);
-        } catch (e) {}
     });
 
     onDestroy(() => {
-        if (isRunning) {
-            stopLabAgent();
-        }
+        if (isRunning) stopLabAgent();
     });
 
-    function handleNodeClick(node) {
-        selectedNode.set(node);
+    function handleLabInitialized() {
+        labInitialized = true;
+        feedSystem('Lab ready. Select Play or Train mode.');
     }
 
-    function handleLabInitialized(event) {
-        labInitialized = true;
-        feedSystem('Lab agent ready. Graph shows your journey through the strategy guide.');
+    function handleModeChange(event) {
+        const newMode = event.detail.mode;
+        if (isRunning) {
+            stopLabAgent();
+            isRunning = false;
+        }
+        setLabMode(newMode === 'train' ? 'purerl' : 'llm');
     }
 
     function toggleRun() {
@@ -312,10 +122,10 @@ ACTIONS1: btn1, btn2, btn3, btn4, btn5, btn6, btn7, btn8, btn9, btn10
 
         if (isRunning) {
             startLabAgent();
-            feedSystem('Lab agent started - following strategy guide...');
+            feedSystem(mode === 'train' ? 'Training started...' : 'Playing with LLM guidance...');
         } else {
             stopLabAgent();
-            feedSystem('Lab agent paused.');
+            feedSystem('Paused.');
         }
     }
 
@@ -324,105 +134,71 @@ ACTIONS1: btn1, btn2, btn3, btn4, btn5, btn6, btn7, btn8, btn9, btn10
         resetLab();
         resetMetrics();
         isRunning = false;
-        isRecording = false;
-        feedSystem('Lab reset. Ready for a new run.');
-    }
-
-    function fitGraph() {
-        if (graphComponent) {
-            graphComponent.fitGraph();
-        }
-    }
-
-    function centerOnCurrent() {
-        if (graphComponent && $currentGraphLocation) {
-            graphComponent.centerOnNode($currentGraphLocation);
-        }
-    }
-
-    // Speed control
-    function cycleSpeed() {
-        const currentIndex = speeds.indexOf(playbackSpeed);
-        playbackSpeed = speeds[(currentIndex + 1) % speeds.length];
-        setLabSpeed(playbackSpeed);
-        feedSystem(`Playback speed: ${playbackSpeed}x`);
+        feedSystem('Reset complete.');
     }
 
     function stepOnce() {
-        if (!labInitialized) return;
+        if (!labInitialized || isRunning) return;
         stepLabAgent();
-        feedSystem('Stepped one frame');
     }
 
-    // Save/Load states
-    // Convert Uint8Array to base64 for JSON storage
-    function uint8ArrayToBase64(uint8Array) {
+    function cycleSpeed() {
+        const idx = speeds.indexOf(playbackSpeed);
+        playbackSpeed = speeds[(idx + 1) % speeds.length];
+        setLabSpeed(playbackSpeed);
+    }
+
+    // Save/Load state helpers
+    function uint8ArrayToBase64(arr) {
         let binary = '';
-        for (let i = 0; i < uint8Array.byteLength; i++) {
-            binary += String.fromCharCode(uint8Array[i]);
+        for (let i = 0; i < arr.byteLength; i++) {
+            binary += String.fromCharCode(arr[i]);
         }
         return btoa(binary);
     }
 
-    // Convert base64 back to Uint8Array
     function base64ToUint8Array(base64) {
         const binary = atob(base64);
-        const uint8Array = new Uint8Array(binary.length);
+        const arr = new Uint8Array(binary.length);
         for (let i = 0; i < binary.length; i++) {
-            uint8Array[i] = binary.charCodeAt(i);
+            arr[i] = binary.charCodeAt(i);
         }
-        return uint8Array;
+        return arr;
     }
 
     async function saveState() {
-        if (!labInitialized) {
-            feedSystem('Lab not initialized yet');
-            return;
-        }
+        if (!labInitialized) return;
         const { emulator } = getLabInstances();
-        if (!emulator) {
-            feedSystem('Emulator not available');
-            return;
-        }
+        if (!emulator) return;
 
         try {
-            const state = emulator.saveState(); // Returns Uint8Array
+            const state = emulator.saveState();
             const newState = {
                 id: Date.now(),
                 name: `State ${savedStates.length + 1}`,
                 timestamp: new Date().toISOString(),
                 location: $currentGraphLocation,
-                metrics: { ...$labMetrics },
-                data: uint8ArrayToBase64(state) // Store as base64 string
+                data: uint8ArrayToBase64(state)
             };
             savedStates = [...savedStates, newState];
             localStorage.setItem('tesserack_lab_states', JSON.stringify(savedStates));
-            feedSystem(`Saved state: ${newState.name}`);
+            feedSystem(`Saved: ${newState.name}`);
         } catch (e) {
-            console.error('[Lab] Save state error:', e);
-            feedSystem(`Failed to save state: ${e.message}`);
+            feedSystem(`Save failed: ${e.message}`);
         }
     }
 
     async function loadState(state) {
-        if (!labInitialized) {
-            feedSystem('Lab not initialized yet');
-            return;
-        }
+        if (!labInitialized) return;
         const { emulator } = getLabInstances();
-        if (!emulator) {
-            feedSystem('Emulator not available');
-            return;
-        }
+        if (!emulator) return;
 
         try {
-            const stateData = base64ToUint8Array(state.data); // Convert back to Uint8Array
-            emulator.loadState(stateData);
-            feedSystem(`Loaded state: ${state.name}`);
+            emulator.loadState(base64ToUint8Array(state.data));
+            feedSystem(`Loaded: ${state.name}`);
             showSaveStates = false;
         } catch (e) {
-            console.error('[Lab] Load state error:', e);
-            feedSystem(`Failed to load state: ${e.message}`);
+            feedSystem(`Load failed: ${e.message}`);
         }
     }
 
@@ -431,34 +207,18 @@ ACTIONS1: btn1, btn2, btn3, btn4, btn5, btn6, btn7, btn8, btn9, btn10
         localStorage.setItem('tesserack_lab_states', JSON.stringify(savedStates));
     }
 
-    // Recording
-    function toggleRecording() {
-        isRecording = !isRecording;
-        if (isRecording) {
-            feedSystem('Recording started');
-            // TODO: Start recording actions
-        } else {
-            feedSystem('Recording stopped');
-            // TODO: Save recording
-        }
+    function handleHyperparamsApply(event) {
+        const { learningRate, rolloutSize, gamma } = event.detail;
+        updateRLConfig({ learningRate, rolloutSize, gamma });
     }
 
-    function togglePureRLMode() {
-        if (isRunning) {
-            stopLabAgent();
-            isRunning = false;
-        }
-        setLabMode(isPureRLMode ? 'llm' : 'purerl');
-    }
-
-    // Format reward with sign
+    // Format helpers
     function formatReward(r) {
         if (r > 0) return '+' + r.toFixed(3);
         if (r < 0) return r.toFixed(3);
         return '0.000';
     }
 
-    // Get reward class for styling
     function rewardClass(r) {
         if (r > 0) return 'positive';
         if (r < 0) return 'negative';
@@ -468,692 +228,395 @@ ACTIONS1: btn1, btn2, btn3, btn4, btn5, btn6, btn7, btn8, btn9, btn10
 
 <div class="lab-view">
     <!-- Header -->
-    <div class="lab-header">
-        <div class="lab-title">
-            <Map size={20} />
-            <span>Lab Mode</span>
-            <span class="badge">Strategy Guide</span>
-        </div>
+    <header class="lab-header">
+        <div class="header-left">
+            <ModeToggle {mode} disabled={isRunning} on:change={handleModeChange} />
 
-        <div class="lab-controls">
-            <button class="control-btn" on:click={fitGraph} title="Fit graph">
-                <RotateCcw size={16} />
-            </button>
-            <button class="control-btn" on:click={centerOnCurrent} title="Center on current">
-                <Target size={16} />
-            </button>
-            <button class="control-btn" on:click={() => showConfig = !showConfig} title="Settings">
-                <Settings size={16} />
-            </button>
-            <button class="control-btn" class:active={showExperiments} on:click={() => showExperiments = !showExperiments} title="Experiments">
-                <FlaskConical size={16} />
-            </button>
-            <button class="control-btn" class:active={isPureRLMode} on:click={togglePureRLMode} title="Pure RL Mode - No LLM calls, deterministic rewards only">
-                <Brain size={16} />
-                <span>Pure RL</span>
-            </button>
-            <button class="control-btn primary" on:click={toggleRun}>
-                {#if isRunning}
-                    <Pause size={16} />
-                    <span>Pause</span>
-                {:else}
-                    <Play size={16} />
-                    <span>Run</span>
-                {/if}
-            </button>
-        </div>
-    </div>
-
-    <!-- Main Content Row: Map + Game -->
-    <div class="main-row">
-        <!-- Map Area (60%) -->
-        <div class="graph-area">
-            <WalkthroughGraph
-                bind:this={graphComponent}
-                graphData={$walkthroughGraph}
-                currentLocation={$currentGraphLocation}
-                nextLocation={$nextGraphLocation}
-                completedObjectives={$completedObjectives}
-                onNodeClick={handleNodeClick}
-            />
-
-            <!-- Graph Legend -->
-            <div class="graph-legend">
-                <div class="legend-item">
-                    <span class="legend-dot location"></span>
-                    <span>Location</span>
-                </div>
-                <div class="legend-item">
-                    <span class="legend-dot current"></span>
-                    <span>Current</span>
-                </div>
-                <div class="legend-item">
-                    <span class="legend-dot next"></span>
-                    <span>Next</span>
-                </div>
-                <div class="legend-item">
-                    <span class="legend-dot completed"></span>
-                    <span>Completed</span>
-                </div>
-            </div>
-        </div>
-
-        <!-- Game Section (40%) -->
-        <div class="game-section">
-            <!-- Local emulator -->
-            <div class="game-preview">
-                <LabCanvas on:initialized={handleLabInitialized} />
-            </div>
-
-            <!-- Pure RL Metrics Panel (shown when in Pure RL mode) -->
-            {#if isPureRLMode}
-                <div class="rl-metrics-panel">
-                    <div class="rl-metric-row">
-                        <span class="rl-label">Step</span>
-                        <span class="rl-value">{$pureRLMetrics.step.toLocaleString()}</span>
-                    </div>
-                    <div class="rl-metric-row">
-                        <span class="rl-label">Action</span>
-                        <span class="rl-value action">{$pureRLMetrics.action || '-'}</span>
-                    </div>
-                    <div class="rl-metric-row">
-                        <span class="rl-label">Updates</span>
-                        <span class="rl-value">{$pureRLMetrics.trainSteps}</span>
-                    </div>
-                    <div class="rl-divider"></div>
-                    <!-- Buffer Progress -->
-                    <div class="rl-metric-row">
-                        <span class="rl-label">Buffer</span>
-                        <span class="rl-value">{$pureRLMetrics.bufferFill}/{$pureRLMetrics.bufferSize}</span>
-                    </div>
-                    <div class="buffer-bar">
-                        <div class="buffer-fill" style="width: {($pureRLMetrics.bufferFill / $pureRLMetrics.bufferSize) * 100}%"></div>
-                    </div>
-                    <div class="rl-divider"></div>
-                    <!-- Training Metrics -->
-                    <div class="rl-metric-row">
-                        <span class="rl-label">Avg Return</span>
-                        <span class="rl-value {rewardClass($pureRLMetrics.avgRawReturn)}">{$pureRLMetrics.avgRawReturn.toFixed(3)}</span>
-                    </div>
-                    <div class="rl-metric-row">
-                        <span class="rl-label">Entropy</span>
-                        <span class="rl-value">{$pureRLMetrics.policyEntropy.toFixed(3)}</span>
-                    </div>
-                    <div class="rl-divider"></div>
-                    <div class="rl-metric-row">
-                        <span class="rl-label">Step Reward</span>
-                        <span class="rl-value {rewardClass($pureRLMetrics.reward)}">{formatReward($pureRLMetrics.reward)}</span>
-                    </div>
-                    <div class="rl-metric-row">
-                        <span class="rl-label">Total Reward</span>
-                        <span class="rl-value {rewardClass($pureRLMetrics.totalReward)}">{formatReward($pureRLMetrics.totalReward)}</span>
-                    </div>
-                    <div class="rl-divider"></div>
-                    <div class="rl-tier-grid">
-                        <div class="rl-tier" class:active={$pureRLMetrics.breakdown.tier1 > 0}>
-                            <span class="tier-label">T1</span>
-                            <span class="tier-value">{$pureRLMetrics.breakdown.tier1.toFixed(2)}</span>
-                            <span class="tier-desc">Move</span>
-                        </div>
-                        <div class="rl-tier" class:active={$pureRLMetrics.breakdown.tier2 > 0}>
-                            <span class="tier-label">T2</span>
-                            <span class="tier-value">{$pureRLMetrics.breakdown.tier2.toFixed(2)}</span>
-                            <span class="tier-desc">Map</span>
-                        </div>
-                        <div class="rl-tier" class:active={$pureRLMetrics.breakdown.tier3 > 0}>
-                            <span class="tier-label">T3</span>
-                            <span class="tier-value">{$pureRLMetrics.breakdown.tier3.toFixed(2)}</span>
-                            <span class="tier-desc">Goal</span>
-                        </div>
-                        <div class="rl-tier penalty" class:active={$pureRLMetrics.breakdown.penalties < -0.02}>
-                            <span class="tier-label">Pen</span>
-                            <span class="tier-value">{$pureRLMetrics.breakdown.penalties.toFixed(2)}</span>
-                            <span class="tier-desc">Stuck</span>
-                        </div>
-                    </div>
-                    {#if $pureRLMetrics.firedTests.length > 0}
-                        <div class="rl-fired">
-                            {#each $pureRLMetrics.firedTests as test}
-                                <span class="fired-tag">{test}</span>
+            {#if mode === 'train'}
+                <!-- Algorithm Dropdown -->
+                <div class="algorithm-dropdown">
+                    <button
+                        class="dropdown-trigger"
+                        on:click={() => showAlgorithmDropdown = !showAlgorithmDropdown}
+                        disabled={isRunning}
+                    >
+                        <span>{algorithms.find(a => a.id === selectedAlgorithm)?.label}</span>
+                        <ChevronDown size={14} />
+                    </button>
+                    {#if showAlgorithmDropdown}
+                        <div class="dropdown-menu">
+                            {#each algorithms as algo}
+                                <button
+                                    class="dropdown-item"
+                                    class:active={selectedAlgorithm === algo.id}
+                                    on:click={() => { selectedAlgorithm = algo.id; showAlgorithmDropdown = false; }}
+                                >
+                                    {algo.label}
+                                </button>
                             {/each}
                         </div>
                     {/if}
                 </div>
-            {/if}
 
-            <!-- Playback Controls -->
-            <div class="playback-controls">
-                <button class="pb-btn" on:click={toggleRun} title={isRunning ? 'Pause the AI agent' : 'Start the AI agent following the strategy guide'}>
-                    {#if isRunning}
-                        <Pause size={20} strokeWidth={2.5} />
-                    {:else}
-                        <Play size={20} strokeWidth={2.5} />
-                    {/if}
-                </button>
-                <button class="pb-btn" on:click={stepOnce} title="Step one frame - watch AI decisions in slow motion" disabled={isRunning}>
-                    <SkipForward size={20} strokeWidth={2.5} />
-                </button>
-                <button class="pb-btn speed" on:click={cycleSpeed} title="Playback speed - faster for testing, slower for debugging">
-                    <FastForward size={20} strokeWidth={2.5} />
-                    <span>{playbackSpeed}x</span>
-                </button>
-                <div class="pb-divider"></div>
-                <button class="pb-btn" on:click={saveState} title="Save current game state - restore later to compare different approaches">
-                    <Save size={20} strokeWidth={2.5} />
-                </button>
-                <button class="pb-btn" on:click={() => showSaveStates = !showSaveStates} title="Load a previously saved state" class:active={showSaveStates}>
-                    <FolderOpen size={20} strokeWidth={2.5} />
-                </button>
-                <div class="pb-divider"></div>
-                <button class="pb-btn" class:recording={isRecording} on:click={toggleRecording} title={isRecording ? 'Stop recording' : 'Record AI actions for analysis'}>
-                    {#if isRecording}
-                        <Square size={20} strokeWidth={2.5} />
-                    {:else}
-                        <Circle size={20} strokeWidth={2.5} />
-                    {/if}
-                </button>
-                <button class="pb-btn" on:click={handleReset} title="Reset - clear metrics and start fresh">
-                    <RotateCcw size={20} strokeWidth={2.5} />
-                </button>
-            </div>
-
-            <!-- Save States Dropdown -->
-            {#if showSaveStates && savedStates.length > 0}
-                <div class="states-dropdown">
-                    {#each savedStates as state}
-                        <div class="state-item">
-                            <button class="state-load" on:click={() => loadState(state)}>
-                                <span class="state-name">{state.name}</span>
-                                <span class="state-location">{state.location}</span>
-                            </button>
-                            <button class="state-delete" on:click={() => deleteState(state)}>×</button>
-                        </div>
-                    {/each}
-                </div>
-            {:else if showSaveStates}
-                <div class="states-dropdown empty">
-                    No saved states yet
-                </div>
+                <HyperparamsPopover
+                    bind:open={hyperparamsOpen}
+                    disabled={isRunning}
+                    on:apply={handleHyperparamsApply}
+                />
             {/if}
         </div>
-    </div>
 
-    <!-- Agent Pipeline Control Panel (hidden in Pure RL mode) -->
-    {#if !isPureRLMode}
-    <div class="pipeline-panel">
-        <div class="pipeline-header">
-            <h3>Agent Pipeline</h3>
-            <div class="pipeline-stats">
-                <span title="Total actions taken">Steps: <strong>{$labMetrics.totalSteps}</strong></span>
-                <span title="Guide objectives completed">Objectives: <strong>{$labMetrics.objectivesCompleted}/{$graphStats.objectives}</strong></span>
-                <span title="Overall completion">Progress: <strong>{$completionPercentage}%</strong></span>
-                <span title="Cumulative reward signal">Reward: <strong>{$labMetrics.episodeReward.toFixed(1)}</strong></span>
+        <div class="header-right">
+            <button class="header-btn" on:click={saveState} title="Save state">
+                <Save size={16} />
+            </button>
+            <div class="save-states-container">
+                <button
+                    class="header-btn"
+                    class:active={showSaveStates}
+                    on:click={() => showSaveStates = !showSaveStates}
+                    title="Load state"
+                >
+                    <FolderOpen size={16} />
+                </button>
+                {#if showSaveStates}
+                    <div class="states-dropdown">
+                        {#if savedStates.length > 0}
+                            {#each savedStates as state}
+                                <div class="state-item">
+                                    <button class="state-load" on:click={() => loadState(state)}>
+                                        <span class="state-name">{state.name}</span>
+                                        <span class="state-location">{state.location}</span>
+                                    </button>
+                                    <button class="state-delete" on:click={() => deleteState(state)}>×</button>
+                                </div>
+                            {/each}
+                        {:else}
+                            <div class="states-empty">No saved states</div>
+                        {/if}
+                    </div>
+                {/if}
+            </div>
+
+            <div class="header-divider"></div>
+
+            <button class="header-btn speed" on:click={cycleSpeed} title="Playback speed">
+                <FastForward size={16} />
+                <span>{playbackSpeed}x</span>
+            </button>
+            <button
+                class="header-btn"
+                on:click={stepOnce}
+                disabled={isRunning || !labInitialized}
+                title="Step once"
+            >
+                <SkipForward size={16} />
+            </button>
+            <button class="header-btn" on:click={handleReset} title="Reset">
+                <RotateCcw size={16} />
+            </button>
+
+            <button class="run-btn" class:running={isRunning} on:click={toggleRun}>
+                {#if isRunning}
+                    <Pause size={18} />
+                    <span>Pause</span>
+                {:else}
+                    <Play size={18} />
+                    <span>Run</span>
+                {/if}
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <div class="main-content">
+        <!-- Game Canvas (60%) -->
+        <div class="game-area">
+            <div class="canvas-wrapper">
+                <LabCanvas on:initialized={handleLabInitialized} />
             </div>
         </div>
 
-        <div class="pipeline-nodes">
-            <!-- Knowledge Base -->
-            <div class="pipeline-card" title="Strategy guide data the AI references">
-                <div class="card-header">
-                    <div class="card-icon kb"><Map size={18} /></div>
-                    <span class="card-title">Knowledge Base</span>
-                </div>
-                <div class="card-stats">
-                    <div class="stat-row">
-                        <span>Locations</span>
-                        <strong>{$graphStats.locations}</strong>
+        <!-- Metrics Panel (40%) -->
+        <div class="metrics-panel">
+            {#if mode === 'train'}
+                <!-- Train Mode Metrics -->
+                <div class="metrics-section">
+                    <div class="metric-row">
+                        <span class="metric-label">Step</span>
+                        <span class="metric-value mono">{$pureRLMetrics.step.toLocaleString()}</span>
                     </div>
-                    <div class="stat-row">
-                        <span>Objectives</span>
-                        <strong>{$graphStats.objectives}</strong>
+                    <div class="metric-row">
+                        <span class="metric-label">Action</span>
+                        <span class="metric-value action-badge">{$pureRLMetrics.action || '-'}</span>
                     </div>
-                    <div class="stat-row">
-                        <span>Current</span>
-                        <strong class="current-location">{$currentGraphLocation || 'N/A'}</strong>
+                    <div class="metric-row">
+                        <span class="metric-label">Updates</span>
+                        <span class="metric-value mono">{$pureRLMetrics.trainSteps}</span>
                     </div>
                 </div>
-            </div>
 
-            <div class="pipeline-arrow">→</div>
+                <div class="metrics-divider"></div>
 
-            <!-- LLM Planner -->
-            <div class="pipeline-card" title="Asks the AI model what to do next">
-                <div class="card-header">
-                    <div class="card-icon llm"><Zap size={18} /></div>
-                    <span class="card-title">LLM Planner</span>
-                </div>
-                <div class="card-control">
-                    <label>
-                        <span>Query every</span>
-                        <select bind:value={$labConfig.llmQueryFrequency} on:change={() => labConfig.update(c => c)}>
-                            <option value={1}>1 step</option>
-                            <option value={5}>5 steps</option>
-                            <option value={10}>10 steps</option>
-                            <option value={25}>25 steps</option>
-                            <option value={50}>50 steps</option>
-                        </select>
-                    </label>
-                </div>
-                <div class="card-stats">
-                    <div class="stat-row">
-                        <span>Calls</span>
-                        <strong>{$labMetrics.llmCalls}</strong>
+                <div class="metrics-section">
+                    <div class="metric-row">
+                        <span class="metric-label">Buffer</span>
+                        <span class="metric-value mono">{$pureRLMetrics.bufferFill}/{$pureRLMetrics.bufferSize}</span>
+                    </div>
+                    <div class="buffer-bar">
+                        <div
+                            class="buffer-fill"
+                            style="width: {($pureRLMetrics.bufferFill / $pureRLMetrics.bufferSize) * 100}%"
+                        ></div>
                     </div>
                 </div>
-            </div>
 
-            <div class="pipeline-arrow">→</div>
+                <div class="metrics-divider"></div>
 
-            <!-- RL Selector -->
-            <div class="pipeline-card" title="Picks actions based on learned behavior and exploration">
-                <div class="card-header">
-                    <div class="card-icon rl"><Target size={18} /></div>
-                    <span class="card-title">RL Selector</span>
-                </div>
-                <div class="card-control">
-                    <label>
-                        <span>Exploration</span>
-                        <input
-                            type="range"
-                            min="0"
-                            max="100"
-                            value={$labConfig.explorationRate * 100}
-                            on:input={(e) => labConfig.update(c => ({...c, explorationRate: e.target.value / 100}))}
-                        />
-                        <span class="range-value">{($labConfig.explorationRate * 100).toFixed(0)}%</span>
-                    </label>
-                </div>
-                <div class="card-control">
-                    <label>
-                        <span>Guide Weight</span>
-                        <input
-                            type="range"
-                            min="0"
-                            max="100"
-                            value={$labConfig.guideAdherenceWeight * 100}
-                            on:input={(e) => labConfig.update(c => ({...c, guideAdherenceWeight: e.target.value / 100}))}
-                        />
-                        <span class="range-value">{($labConfig.guideAdherenceWeight * 100).toFixed(0)}%</span>
-                    </label>
-                </div>
-            </div>
-        </div>
-    </div>
-    {/if}
-
-    <!-- LLM Instructions Panel (hidden in Pure RL mode) -->
-    {#if !isPureRLMode}
-    <div class="llm-instructions-panel">
-        <button class="instructions-header" on:click={() => showLLMInstructions = !showLLMInstructions}>
-            <span>LLM Instructions</span>
-            <span class="toggle-indicator">{showLLMInstructions ? '▼' : '▶'}</span>
-        </button>
-
-        {#if showLLMInstructions}
-            <div class="instructions-content">
-                <div class="instruction-section">
-                    <h4>System Prompt</h4>
-                    <pre class="prompt-text">{SYSTEM_PROMPT}</pre>
+                <div class="metrics-section">
+                    <div class="metric-row">
+                        <span class="metric-label">Avg Return</span>
+                        <span class="metric-value mono {rewardClass($pureRLMetrics.avgRawReturn)}">
+                            {formatReward($pureRLMetrics.avgRawReturn)}
+                        </span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Entropy</span>
+                        <span class="metric-value mono">{$pureRLMetrics.policyEntropy.toFixed(3)}</span>
+                    </div>
                 </div>
 
-                <div class="instruction-section">
-                    <h4>Current Guide Context</h4>
+                <div class="metrics-divider"></div>
+
+                <!-- Chart -->
+                <div class="chart-section">
+                    <MetricsChart history={$pureRLMetrics.history} />
+                </div>
+
+            {:else}
+                <!-- Play Mode Metrics -->
+                <div class="metrics-section">
+                    <div class="metric-row">
+                        <span class="metric-label">Steps</span>
+                        <span class="metric-value mono">{$labMetrics.totalSteps.toLocaleString()}</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">LLM Calls</span>
+                        <span class="metric-value mono">{$labMetrics.llmCalls}</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Objectives</span>
+                        <span class="metric-value mono">{$labMetrics.objectivesCompleted}/{$graphStats.objectives}</span>
+                    </div>
+                </div>
+
+                <div class="metrics-divider"></div>
+
+                <!-- Guide Context -->
+                <div class="guide-section">
+                    <div class="guide-header">Current Guide Context</div>
                     {#if guideContext}
-                        <div class="guide-context">
-                            <div class="context-header">[STRATEGY GUIDE - {guideContext.location}]</div>
-                            {#if guideContext.description}
-                                <p class="context-desc">{guideContext.description}</p>
-                            {/if}
-
-                            {#if guideContext.objectives.length > 0}
-                                <div class="context-section">
-                                    <strong>Objectives here:</strong>
-                                    <ul>
-                                        {#each guideContext.objectives.slice(0, 3) as obj}
-                                            <li>{obj.name}{obj.description ? `: ${obj.description}` : ''}</li>
-                                        {/each}
-                                    </ul>
-                                </div>
-                            {/if}
-
-                            {#if guideContext.items.length > 0}
-                                <div class="context-section">
-                                    <strong>Items to find:</strong>
-                                    <ul>
-                                        {#each guideContext.items.slice(0, 3) as item}
-                                            <li>{item.name}</li>
-                                        {/each}
-                                    </ul>
-                                </div>
-                            {/if}
-
-                            {#if guideContext.trainers.length > 0}
-                                <div class="context-section">
-                                    <strong>Trainers:</strong>
-                                    <ul>
-                                        {#each guideContext.trainers as trainer}
-                                            <li>{trainer.name}{trainer.badge ? ` (${trainer.badge})` : ''}</li>
-                                        {/each}
-                                    </ul>
-                                </div>
-                            {/if}
-
-                            {#if guideContext.connections.length > 0}
-                                <div class="context-section">
-                                    <strong>Connected to:</strong>
-                                    <ul>
-                                        {#each guideContext.connections.slice(0, 4) as conn}
-                                            <li>{conn.name}</li>
-                                        {/each}
-                                    </ul>
-                                </div>
-                            {/if}
-                        </div>
+                        <div class="guide-location">{guideContext.location}</div>
+                        {#if guideContext.description}
+                            <p class="guide-desc">{guideContext.description}</p>
+                        {/if}
+                        {#if guideContext.objectives.length > 0}
+                            <ul class="guide-objectives">
+                                {#each guideContext.objectives as obj}
+                                    <li>{obj.name}</li>
+                                {/each}
+                            </ul>
+                        {/if}
                     {:else}
-                        <p class="no-context">No guide context available for current location</p>
+                        <p class="guide-empty">No context for current location</p>
                     {/if}
                 </div>
+            {/if}
+        </div>
+    </div>
 
-                <div class="instruction-section">
-                    <h4>User Message (sent with each query)</h4>
-                    <div class="prompt-note">
-                        The guide context above + game state below are combined into each LLM query:
-                    </div>
-                    <pre class="prompt-text">{buildFullPromptPreview($currentGraphLocation, guideContext)}</pre>
+    <!-- Bottom Bar -->
+    <div class="bottom-bar">
+        {#if mode === 'train'}
+            <RewardBar breakdown={$pureRLMetrics.breakdown} />
+        {:else}
+            <div class="progress-bar-container">
+                <div class="progress-bar">
+                    <div class="progress-fill" style="width: {$completionPercentage}%"></div>
                 </div>
+                <span class="progress-label">{$completionPercentage}% complete</span>
             </div>
         {/if}
     </div>
-    {/if}
-
-    <!-- Selected Node Detail -->
-    {#if $selectedNode}
-        <div class="node-detail panel">
-            <div class="detail-header">
-                <span class="detail-type">{$selectedNode.type}</span>
-                <span class="detail-name">{$selectedNode.label || $selectedNode.name}</span>
-            </div>
-            {#if $selectedNode.description}
-                <p class="detail-desc">{$selectedNode.description}</p>
-            {/if}
-            {#if $selectedNode.badge}
-                <p class="detail-badge">Badge: {$selectedNode.badge}</p>
-            {/if}
-            <button class="close-btn" on:click={() => selectedNode.set(null)}>×</button>
-        </div>
-    {/if}
-
-    <!-- Config Panel -->
-    {#if showConfig}
-        <div class="config-panel panel">
-            <h3>Configuration</h3>
-
-            <div class="config-group">
-                <label for="llm-query-freq">LLM Query Frequency</label>
-                <input id="llm-query-freq" type="range" min="1" max="50" bind:value={$labConfig.llmQueryFrequency} />
-                <span>{$labConfig.llmQueryFrequency} steps</span>
-            </div>
-
-            <div class="config-group">
-                <label for="exploration-rate">Exploration Rate</label>
-                <input id="exploration-rate" type="range" min="0" max="100" bind:value={$labConfig.explorationRate}
-                    on:input={(e) => labConfig.update(c => ({...c, explorationRate: e.target.value / 100}))} />
-                <span>{($labConfig.explorationRate * 100).toFixed(0)}%</span>
-            </div>
-
-            <div class="config-group">
-                <label for="guide-adherence">Guide Adherence Weight</label>
-                <input id="guide-adherence" type="range" min="0" max="100" bind:value={$labConfig.guideAdherenceWeight}
-                    on:input={(e) => labConfig.update(c => ({...c, guideAdherenceWeight: e.target.value / 100}))} />
-                <span>{($labConfig.guideAdherenceWeight * 100).toFixed(0)}%</span>
-            </div>
-
-            <button class="config-close" on:click={() => showConfig = false}>Done</button>
-        </div>
-    {/if}
-
-    <!-- Experiment Runner Panel -->
-    {#if showExperiments}
-        <div class="experiment-panel">
-            <ExperimentRunner />
-        </div>
-    {/if}
 </div>
 
 <style>
-    .experiment-panel {
-        position: absolute;
-        top: 80px;
-        right: 20px;
-        width: 340px;
-        max-height: calc(100vh - 200px);
-        overflow-y: auto;
-    }
     .lab-view {
         display: flex;
         flex-direction: column;
         height: 100%;
         gap: 12px;
+        padding: 12px;
+        background: var(--bg-main);
     }
 
+    /* Header */
     .lab-header {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        padding: 12px 16px;
+        padding: 8px 12px;
         background: var(--bg-panel);
         border-radius: 8px;
+        gap: 12px;
     }
 
-    .lab-title {
+    .header-left, .header-right {
         display: flex;
         align-items: center;
         gap: 8px;
-        font-weight: 600;
-        color: var(--text-primary);
     }
 
-    .badge {
-        padding: 2px 8px;
-        background: var(--accent-primary);
-        color: white;
-        border-radius: 4px;
-        font-size: 11px;
-        font-weight: 500;
-    }
-
-    .lab-controls {
-        display: flex;
-        gap: 8px;
-    }
-
-    .control-btn {
+    .header-btn {
         display: flex;
         align-items: center;
-        gap: 6px;
-        padding: 8px 12px;
-        background: var(--bg-input);
+        justify-content: center;
+        gap: 4px;
+        padding: 8px;
         border: none;
         border-radius: 6px;
+        background: var(--bg-input);
         color: var(--text-secondary);
         cursor: pointer;
         transition: all 0.15s;
     }
 
-    .control-btn:hover {
-        background: var(--bg-input);
+    .header-btn:hover:not(:disabled) {
+        background: var(--bg-panel);
         color: var(--text-primary);
     }
 
-    .control-btn.active {
-        background: var(--accent-secondary);
-        color: white;
-    }
-
-    .control-btn.primary {
-        background: var(--accent-primary);
-        color: white;
-    }
-
-    .control-btn.primary:hover {
-        filter: brightness(1.1);
-    }
-
-    .main-row {
-        display: flex;
-        gap: 12px;
-        flex: 1;
-        min-height: 400px;
-    }
-
-    .graph-area {
-        flex: 6;
-        position: relative;
-        background: var(--bg-panel);
-        border-radius: 8px;
-        overflow: hidden;
-    }
-
-    .graph-legend {
-        position: absolute;
-        bottom: 12px;
-        left: 12px;
-        display: flex;
-        gap: 16px;
-        padding: 8px 12px;
-        background: var(--bg-panel);
-        border: 1px solid var(--border-color);
-        border-radius: 6px;
-        font-size: 11px;
-    }
-
-    .legend-item {
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        color: var(--text-muted);
-    }
-
-    .legend-dot {
-        width: 10px;
-        height: 10px;
-        border-radius: 50%;
-    }
-
-    .legend-dot.location { background: #74b9ff; }
-    .legend-dot.current { background: #00ff88; }
-    .legend-dot.next { background: #fdcb6e; }
-    .legend-dot.completed { background: #00b894; }
-
-    .game-section {
-        flex: 4;
-        display: flex;
-        flex-direction: column;
-        gap: 8px;
-        position: relative;
-        background: var(--bg-panel);
-        border-radius: 8px;
-        padding: 12px;
-    }
-
-    .game-preview {
-        flex: 1;
-        min-height: 200px;
-        border-radius: 8px;
-        overflow: hidden;
-        border: 2px solid var(--border-color);
-    }
-
-    .playback-controls {
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        padding: 8px;
-        background: var(--bg-panel);
-        border: 1px solid var(--border-color);
-        border-radius: 6px;
-    }
-
-    .pb-btn {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 4px;
-        min-width: 40px;
-        height: 40px;
-        padding: 8px;
-        background: var(--bg-panel);
-        border: 2px solid var(--border-color);
-        border-radius: 6px;
-        color: #2d3436;
-        cursor: pointer;
-        transition: all 0.15s;
-        overflow: visible;
-    }
-
-    :global([data-theme="dark"]) .pb-btn {
-        color: #fafaf9;
-    }
-
-    .pb-btn:hover:not(:disabled) {
-        background: var(--accent-primary);
-        color: white;
-        border-color: var(--accent-primary);
-    }
-
-    .pb-btn:disabled {
+    .header-btn:disabled {
         opacity: 0.4;
         cursor: not-allowed;
     }
 
-    .pb-btn.active {
+    .header-btn.active {
         background: var(--accent-primary);
         color: white;
     }
 
-    .pb-btn.speed {
-        width: auto;
-        padding: 0 8px;
+    .header-btn.speed {
+        padding: 8px 12px;
         font-size: 11px;
         font-weight: 600;
     }
 
-    .pb-btn.recording {
-        color: #d63031;
-        animation: pulse 1s infinite;
-    }
-
-    @keyframes pulse {
-        0%, 100% { opacity: 1; }
-        50% { opacity: 0.5; }
-    }
-
-    .pb-divider {
+    .header-divider {
         width: 1px;
-        height: 20px;
+        height: 24px;
         background: var(--border-color);
-        margin: 0 4px;
+    }
+
+    .run-btn {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 8px 16px;
+        border: none;
+        border-radius: 6px;
+        background: var(--accent-primary);
+        color: white;
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.15s;
+    }
+
+    .run-btn:hover {
+        filter: brightness(1.1);
+    }
+
+    .run-btn.running {
+        background: #e17055;
+    }
+
+    /* Algorithm Dropdown */
+    .algorithm-dropdown {
+        position: relative;
+    }
+
+    .dropdown-trigger {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 12px;
+        border: 1px solid var(--border-color);
+        border-radius: 6px;
+        background: var(--bg-input);
+        color: var(--text-primary);
+        font-size: 12px;
+        font-weight: 500;
+        cursor: pointer;
+    }
+
+    .dropdown-trigger:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+    }
+
+    .dropdown-menu {
+        position: absolute;
+        top: calc(100% + 4px);
+        left: 0;
+        min-width: 120px;
+        background: var(--bg-panel);
+        border: 1px solid var(--border-color);
+        border-radius: 6px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+        z-index: 100;
+        overflow: hidden;
+    }
+
+    .dropdown-item {
+        display: block;
+        width: 100%;
+        padding: 8px 12px;
+        border: none;
+        background: transparent;
+        color: var(--text-secondary);
+        font-size: 12px;
+        text-align: left;
+        cursor: pointer;
+    }
+
+    .dropdown-item:hover {
+        background: var(--bg-input);
+        color: var(--text-primary);
+    }
+
+    .dropdown-item.active {
+        background: var(--accent-primary);
+        color: white;
+    }
+
+    /* Save States */
+    .save-states-container {
+        position: relative;
     }
 
     .states-dropdown {
         position: absolute;
-        top: 100%;
-        left: 0;
+        top: calc(100% + 4px);
+        right: 0;
         width: 180px;
         max-height: 200px;
         overflow-y: auto;
         background: var(--bg-panel);
         border: 1px solid var(--border-color);
         border-radius: 6px;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
         z-index: 100;
-    }
-
-    .states-dropdown.empty {
-        padding: 12px;
-        text-align: center;
-        color: var(--text-muted);
-        font-size: 12px;
     }
 
     .state-item {
@@ -1205,506 +668,206 @@ ACTIONS1: btn1, btn2, btn3, btn4, btn5, btn6, btn7, btn8, btn9, btn10
         color: #d63031;
     }
 
-    /* Pipeline Control Panel */
-    .pipeline-panel {
-        background: var(--bg-panel);
-        border-radius: 8px;
-        padding: 16px;
-    }
-
-    .pipeline-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 16px;
-    }
-
-    .pipeline-header h3 {
-        margin: 0;
-        font-size: 14px;
-        font-weight: 600;
-        color: var(--text-primary);
-    }
-
-    .pipeline-stats {
-        display: flex;
-        gap: 16px;
-        font-size: 12px;
-        color: var(--text-secondary);
-    }
-
-    .pipeline-stats strong {
-        color: var(--text-primary);
-    }
-
-    .pipeline-nodes {
-        display: flex;
-        align-items: stretch;
-        gap: 12px;
-    }
-
-    .pipeline-card {
-        flex: 1;
-        background: var(--bg-input);
-        border-radius: 8px;
+    .states-empty {
         padding: 12px;
-        display: flex;
-        flex-direction: column;
-        gap: 10px;
+        text-align: center;
+        color: var(--text-muted);
+        font-size: 12px;
     }
 
-    .card-header {
+    /* Main Content */
+    .main-content {
+        flex: 1;
         display: flex;
-        align-items: center;
-        gap: 8px;
+        gap: 12px;
+        min-height: 0;
     }
 
-    .card-icon {
-        width: 32px;
-        height: 32px;
+    .game-area {
+        flex: 6;
         display: flex;
         align-items: center;
         justify-content: center;
-        border-radius: 6px;
+        background: var(--bg-panel);
+        border-radius: 8px;
+        padding: 12px;
+        overflow: hidden;
     }
 
-    .card-icon.kb { background: rgba(116, 185, 255, 0.2); color: #74b9ff; }
-    .card-icon.llm { background: rgba(253, 203, 110, 0.2); color: #fdcb6e; }
-    .card-icon.rl { background: rgba(0, 206, 201, 0.2); color: #00cec9; }
+    .canvas-wrapper {
+        width: 100%;
+        height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 8px;
+        overflow: hidden;
+        border: 2px solid var(--border-color);
+    }
 
-    .card-title {
+    /* Metrics Panel */
+    .metrics-panel {
+        flex: 4;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        padding: 16px;
+        background: var(--bg-panel);
+        border-radius: 8px;
+        overflow-y: auto;
+    }
+
+    .metrics-section {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .metrics-divider {
+        height: 1px;
+        background: var(--border-color);
+        margin: 4px 0;
+    }
+
+    .metric-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .metric-label {
+        font-size: 12px;
+        color: var(--text-muted);
+    }
+
+    .metric-value {
         font-size: 13px;
         font-weight: 600;
         color: var(--text-primary);
     }
 
-    .card-stats {
-        display: flex;
-        flex-direction: column;
-        gap: 4px;
-    }
-
-    .stat-row {
-        display: flex;
-        justify-content: space-between;
-        font-size: 12px;
-    }
-
-    .stat-row span {
-        color: var(--text-muted);
-    }
-
-    .stat-row strong {
-        color: var(--text-secondary);
-    }
-
-    .stat-row .current-location {
-        color: var(--accent-primary);
-        max-width: 100px;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-    }
-
-    .card-control {
-        display: flex;
-        flex-direction: column;
-        gap: 4px;
-    }
-
-    .card-control label {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        font-size: 11px;
-        color: var(--text-muted);
-    }
-
-    .card-control select {
-        padding: 4px 8px;
-        background: var(--bg-panel);
-        border: 1px solid var(--border-color);
-        border-radius: 4px;
-        font-size: 11px;
-        color: var(--text-primary);
-        cursor: pointer;
-    }
-
-    .card-control input[type="range"] {
-        flex: 1;
-        height: 4px;
-        -webkit-appearance: none;
-        appearance: none;
-        background: var(--border-color);
-        border-radius: 2px;
-        cursor: pointer;
-    }
-
-    .card-control input[type="range"]::-webkit-slider-thumb {
-        -webkit-appearance: none;
-        width: 12px;
-        height: 12px;
-        background: var(--accent-primary);
-        border-radius: 50%;
-        cursor: pointer;
-    }
-
-    .range-value {
-        min-width: 32px;
-        text-align: right;
-        font-weight: 600;
-        color: var(--text-secondary);
-    }
-
-    .pipeline-arrow {
-        display: flex;
-        align-items: center;
-        color: var(--text-muted);
-        font-size: 20px;
-        padding: 0 4px;
-    }
-
-    .node-detail {
-        position: absolute;
-        top: 80px;
-        right: 20px;
-        width: 280px;
-        padding: 16px;
-    }
-
-    .detail-header {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        margin-bottom: 8px;
-    }
-
-    .detail-type {
-        padding: 2px 8px;
-        background: var(--accent-secondary);
-        color: white;
-        border-radius: 4px;
-        font-size: 10px;
-        text-transform: uppercase;
-    }
-
-    .detail-name {
-        font-weight: 600;
-        color: var(--text-primary);
-    }
-
-    .detail-desc {
-        font-size: 12px;
-        color: var(--text-secondary);
-        line-height: 1.5;
-    }
-
-    .detail-badge {
-        margin-top: 8px;
-        font-size: 12px;
-        color: var(--accent-primary);
-    }
-
-    .close-btn {
-        position: absolute;
-        top: 8px;
-        right: 8px;
-        width: 24px;
-        height: 24px;
-        background: none;
-        border: none;
-        color: var(--text-muted);
-        cursor: pointer;
-        font-size: 18px;
-    }
-
-    .config-panel {
-        position: absolute;
-        top: 80px;
-        left: 20px;
-        width: 300px;
-        padding: 16px;
-    }
-
-    .config-panel h3 {
-        margin: 0 0 16px 0;
-        color: var(--text-primary);
-    }
-
-    .config-group {
-        display: flex;
-        flex-direction: column;
-        gap: 4px;
-        margin-bottom: 16px;
-    }
-
-    .config-group label {
-        font-size: 12px;
-        color: var(--text-secondary);
-    }
-
-    .config-group input[type="range"] {
-        width: 100%;
-    }
-
-    .config-group span {
-        font-size: 11px;
-        color: var(--text-muted);
-        text-align: right;
-    }
-
-    .config-close {
-        width: 100%;
-        padding: 8px;
-        background: var(--accent-primary);
-        border: none;
-        border-radius: 6px;
-        color: white;
-        cursor: pointer;
-    }
-
-    /* LLM Instructions Panel */
-    .llm-instructions-panel {
-        background: var(--bg-panel);
-        border-radius: 8px;
-        overflow: hidden;
-    }
-
-    .instructions-header {
-        width: 100%;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 12px 16px;
-        background: none;
-        border: none;
-        color: var(--text-primary);
-        font-size: 14px;
-        font-weight: 600;
-        cursor: pointer;
-        transition: background 0.15s;
-    }
-
-    .instructions-header:hover {
-        background: var(--bg-input);
-    }
-
-    .toggle-indicator {
-        font-size: 10px;
-        color: var(--text-muted);
-    }
-
-    .instructions-content {
-        padding: 0 16px 16px;
-        display: flex;
-        flex-direction: column;
-        gap: 16px;
-    }
-
-    .instruction-section {
-        background: var(--bg-input);
-        border-radius: 6px;
-        padding: 12px;
-    }
-
-    .instruction-section h4 {
-        margin: 0 0 8px 0;
-        font-size: 12px;
-        font-weight: 600;
-        color: var(--text-secondary);
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-    }
-
-    .prompt-text {
-        margin: 0;
-        padding: 10px;
-        background: var(--bg-panel);
-        border-radius: 4px;
-        font-size: 11px;
+    .metric-value.mono {
         font-family: 'Monaco', 'Menlo', monospace;
-        color: var(--text-secondary);
-        white-space: pre-wrap;
-        word-break: break-word;
-        max-height: 200px;
-        overflow-y: auto;
-        line-height: 1.5;
     }
 
-    .guide-context {
-        font-size: 12px;
-        color: var(--text-secondary);
-    }
-
-    .context-header {
-        font-weight: 600;
-        color: #fdcb6e;
-        margin-bottom: 8px;
-    }
-
-    .context-desc {
-        margin: 0 0 8px 0;
-        color: var(--text-muted);
-        font-style: italic;
-    }
-
-    .context-section {
-        margin-top: 8px;
-    }
-
-    .context-section strong {
-        color: var(--text-primary);
-        font-size: 11px;
-    }
-
-    .context-section ul {
-        margin: 4px 0 0 0;
-        padding-left: 16px;
-    }
-
-    .context-section li {
-        margin: 2px 0;
-        color: var(--text-muted);
-    }
-
-    .no-context {
-        margin: 0;
-        color: var(--text-muted);
-        font-style: italic;
-        font-size: 12px;
-    }
-
-    .prompt-note {
-        font-size: 11px;
-        color: var(--text-muted);
-        margin-bottom: 8px;
-        font-style: italic;
-    }
-
-    /* Pure RL Metrics Panel */
-    .rl-metrics-panel {
-        display: flex;
-        flex-direction: column;
-        gap: 6px;
-        padding: 10px;
-        background: var(--bg-input);
-        border-radius: 6px;
-        font-size: 11px;
-    }
-
-    .rl-metric-row {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-    }
-
-    .rl-label {
-        color: var(--text-muted);
-    }
-
-    .rl-value {
-        font-weight: 600;
-        color: var(--text-primary);
-    }
-
-    .rl-value.action {
-        text-transform: uppercase;
-        background: var(--accent-primary);
-        color: white;
-        padding: 2px 6px;
-        border-radius: 3px;
-        font-size: 10px;
-    }
-
-    .rl-value.positive {
+    .metric-value.positive {
         color: #00b894;
     }
 
-    .rl-value.negative {
+    .metric-value.negative {
         color: #d63031;
     }
 
-    .rl-divider {
-        height: 1px;
-        background: var(--border-color);
-        margin: 2px 0;
-    }
-
-    .rl-tier-grid {
-        display: grid;
-        grid-template-columns: repeat(4, 1fr);
-        gap: 4px;
-    }
-
-    .rl-tier {
-        padding: 4px;
-        background: var(--bg-panel);
+    .action-badge {
+        display: inline-block;
+        padding: 2px 8px;
+        background: var(--accent-primary);
+        color: white;
         border-radius: 4px;
-        text-align: center;
-        opacity: 0.5;
+        font-size: 11px;
+        text-transform: uppercase;
     }
 
-    .rl-tier.active {
-        opacity: 1;
-        background: rgba(0, 184, 148, 0.15);
-        border: 1px solid rgba(0, 184, 148, 0.3);
-    }
-
-    .rl-tier.penalty.active {
-        background: rgba(214, 48, 49, 0.15);
-        border: 1px solid rgba(214, 48, 49, 0.3);
-    }
-
-    .rl-tier .tier-label {
-        display: block;
-        font-size: 9px;
-        color: var(--text-muted);
-        font-weight: 600;
-    }
-
-    .rl-tier .tier-value {
-        display: block;
-        font-size: 12px;
-        font-weight: 700;
-        color: var(--text-primary);
-    }
-
-    .rl-tier .tier-desc {
-        display: block;
-        font-size: 8px;
-        color: var(--text-muted);
-    }
-
-    .rl-fired {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 4px;
-        margin-top: 4px;
-    }
-
-    .fired-tag {
-        padding: 2px 6px;
-        background: rgba(0, 184, 148, 0.2);
-        color: #00b894;
-        border-radius: 3px;
-        font-size: 9px;
-        font-weight: 500;
-    }
-
-    /* Buffer progress bar */
     .buffer-bar {
         width: 100%;
-        height: 4px;
-        background: var(--border-color);
-        border-radius: 2px;
+        height: 6px;
+        background: var(--bg-input);
+        border-radius: 3px;
         overflow: hidden;
-        margin-top: 2px;
     }
 
     .buffer-fill {
         height: 100%;
         background: var(--accent-primary);
-        border-radius: 2px;
-        transition: width 0.1s ease-out;
+        border-radius: 3px;
+        transition: width 0.15s ease-out;
+    }
+
+    .chart-section {
+        flex: 1;
+        min-height: 180px;
+    }
+
+    /* Guide Section (Play mode) */
+    .guide-section {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .guide-header {
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .guide-location {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--accent-primary);
+    }
+
+    .guide-desc {
+        font-size: 12px;
+        color: var(--text-secondary);
+        margin: 0;
+        line-height: 1.5;
+    }
+
+    .guide-objectives {
+        margin: 0;
+        padding-left: 16px;
+        font-size: 12px;
+        color: var(--text-secondary);
+    }
+
+    .guide-objectives li {
+        margin: 4px 0;
+    }
+
+    .guide-empty {
+        font-size: 12px;
+        color: var(--text-muted);
+        font-style: italic;
+        margin: 0;
+    }
+
+    /* Bottom Bar */
+    .bottom-bar {
+        flex-shrink: 0;
+    }
+
+    .progress-bar-container {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 12px 16px;
+        background: var(--bg-panel);
+        border-radius: 8px;
+    }
+
+    .progress-bar {
+        flex: 1;
+        height: 8px;
+        background: var(--bg-input);
+        border-radius: 4px;
+        overflow: hidden;
+    }
+
+    .progress-fill {
+        height: 100%;
+        background: var(--accent-primary);
+        border-radius: 4px;
+        transition: width 0.3s ease-out;
+    }
+
+    .progress-label {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--text-secondary);
+        white-space: nowrap;
     }
 </style>

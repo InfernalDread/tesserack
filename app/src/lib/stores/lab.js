@@ -208,3 +208,31 @@ export const nextGraphLocation = derived(
         return null;
     }
 );
+
+// RL Training Hyperparameter Presets
+export const RL_PRESETS = {
+    conservative: { learningRate: 0.005, rolloutSize: 256, gamma: 0.99 },
+    balanced: { learningRate: 0.01, rolloutSize: 128, gamma: 0.99 },
+    fast: { learningRate: 0.05, rolloutSize: 64, gamma: 0.95 },
+};
+
+// RL Training Configuration Store
+export const rlConfig = writable({
+    preset: 'balanced',
+    learningRate: 0.01,
+    rolloutSize: 128,
+    gamma: 0.99,
+});
+
+// Apply a preset to rlConfig
+export function applyPreset(presetName) {
+    const preset = RL_PRESETS[presetName];
+    if (preset) {
+        rlConfig.set({ preset: presetName, ...preset });
+    }
+}
+
+// Set custom config (sets preset to 'custom')
+export function setRLConfig(config) {
+    rlConfig.set({ preset: 'custom', ...config });
+}
