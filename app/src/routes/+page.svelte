@@ -1,7 +1,7 @@
 <script>
     import { onMount } from 'svelte';
     import { browser } from '$app/environment';
-    import { Info, Github, ExternalLink, Gamepad2, FlaskConical } from 'lucide-svelte';
+    import { Info, Github, ExternalLink } from 'lucide-svelte';
 
     // Components
     import Header from '$lib/components/Header.svelte';
@@ -23,15 +23,15 @@
     import { modelState } from '$lib/stores/training';
     import { feedSystem } from '$lib/stores/feed';
 
-    // View mode: 'play' or 'lab' - restore from localStorage
-    let viewMode = 'play';
+    // View mode: 'lab' (default) or 'classic'
+    let viewMode = 'lab';
     let mounted = false;
 
     onMount(() => {
-        // Restore last view mode
+        // Restore last view mode (but default to lab)
         const savedMode = localStorage.getItem('tesserack_viewMode');
-        if (savedMode === 'play' || savedMode === 'lab') {
-            viewMode = savedMode;
+        if (savedMode === 'classic') {
+            viewMode = 'classic';
         }
         mounted = true;
 
@@ -42,37 +42,25 @@
     $: if (mounted && viewMode) {
         localStorage.setItem('tesserack_viewMode', viewMode);
     }
+
+    function switchToClassic() {
+        viewMode = 'classic';
+    }
+
+    function switchToLab() {
+        viewMode = 'lab';
+    }
 </script>
 
 <div class="app">
     <Header />
 
-    <!-- View Mode Toggle -->
-    <div class="view-toggle">
-        <button
-            class="toggle-btn"
-            class:active={viewMode === 'play'}
-            on:click={() => viewMode = 'play'}
-        >
-            <Gamepad2 size={16} />
-            <span>Play</span>
-        </button>
-        <button
-            class="toggle-btn"
-            class:active={viewMode === 'lab'}
-            on:click={() => viewMode = 'lab'}
-        >
-            <FlaskConical size={16} />
-            <span>Lab</span>
-        </button>
-    </div>
-
     {#if viewMode === 'lab'}
-        <!-- Lab Mode -->
+        <!-- Lab Mode (Default) -->
         <main class="lab-content">
             {#if !$romLoaded}
                 <div class="lab-prompt">
-                    <p>Load a ROM using the dropdown above to start Lab mode</p>
+                    <p>Load a ROM using the dropdown above to begin</p>
                 </div>
             {/if}
             <div class="lab-layout">
@@ -81,11 +69,19 @@
                 </div>
                 <div class="lab-sidebar">
                     <ActivityFeed />
+                    <button class="classic-link" on:click={switchToClassic}>
+                        Switch to Classic view
+                    </button>
                 </div>
             </div>
         </main>
     {:else}
-        <!-- Play Mode -->
+        <!-- Classic Mode -->
+        <div class="classic-header">
+            <button class="back-to-lab" on:click={switchToLab}>
+                &larr; Back to Lab
+            </button>
+        </div>
         <main class="main-content">
             <div class="left-column">
                 {#if !$romLoaded}
@@ -115,10 +111,7 @@
         </main>
 
         <AdvancedPanel />
-    {/if}
 
-    <!-- Activity Feed for Play mode (Lab mode has it in sidebar) -->
-    {#if viewMode !== 'lab'}
         <div class="global-feed">
             <ActivityFeed />
         </div>
@@ -158,43 +151,48 @@
         min-height: 100vh;
     }
 
-    .view-toggle {
-        display: flex;
-        gap: 4px;
-        padding: 4px;
-        background: var(--bg-input);
-        border-radius: 8px;
-        width: fit-content;
-        margin: 16px auto 0;
-    }
-
-    .toggle-btn {
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        padding: 8px 16px;
-        background: transparent;
-        border: none;
-        border-radius: 6px;
-        color: var(--text-muted);
-        font-size: 13px;
-        font-weight: 500;
-        cursor: pointer;
-        transition: all 0.15s;
-    }
-
-    .toggle-btn:hover {
-        color: var(--text-secondary);
-    }
-
-    .toggle-btn.active {
-        background: var(--accent-primary);
-        color: white;
-    }
-
     .lab-content {
         margin-top: 16px;
         min-height: 600px;
+    }
+
+    .classic-link {
+        display: block;
+        width: 100%;
+        padding: 10px;
+        margin-top: 8px;
+        background: transparent;
+        border: 1px dashed var(--border-color);
+        border-radius: 6px;
+        color: var(--text-muted);
+        font-size: 12px;
+        cursor: pointer;
+        transition: all 0.15s;
+        text-align: center;
+    }
+
+    .classic-link:hover {
+        color: var(--text-secondary);
+        border-color: var(--text-muted);
+    }
+
+    .classic-header {
+        margin-top: 16px;
+        margin-bottom: 8px;
+    }
+
+    .back-to-lab {
+        padding: 8px 12px;
+        background: transparent;
+        border: none;
+        color: var(--text-muted);
+        font-size: 13px;
+        cursor: pointer;
+        transition: color 0.15s;
+    }
+
+    .back-to-lab:hover {
+        color: var(--accent-primary);
     }
 
     .lab-layout {
