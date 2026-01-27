@@ -1,6 +1,6 @@
 <script>
     import { onMount } from 'svelte';
-    import { Info, Github, ExternalLink } from 'lucide-svelte';
+    import { Info, Github, ExternalLink, Gamepad2, FlaskConical } from 'lucide-svelte';
 
     // Components
     import Header from '$lib/components/Header.svelte';
@@ -16,12 +16,16 @@
     import LLMConfig from '$lib/components/LLMConfig.svelte';
     import RomDropzone from '$lib/components/RomDropzone.svelte';
     import ModelStatus from '$lib/components/ModelStatus.svelte';
+    import LabView from '$lib/components/lab/LabView.svelte';
 
     // Stores
     import { romLoaded, gameState } from '$lib/stores/game';
     import { activeMode } from '$lib/stores/agent';
     import { modelState } from '$lib/stores/training';
     import { feedSystem } from '$lib/stores/feed';
+
+    // View mode: 'play' or 'lab'
+    let viewMode = 'play';
 
     onMount(() => {
         feedSystem('Welcome to Tesserack! Drop a Pokemon Red ROM to begin.');
@@ -31,37 +35,65 @@
 <div class="app">
     <Header />
 
-    <LLMConfig />
+    <!-- View Mode Toggle -->
+    <div class="view-toggle">
+        <button
+            class="toggle-btn"
+            class:active={viewMode === 'play'}
+            on:click={() => viewMode = 'play'}
+        >
+            <Gamepad2 size={16} />
+            <span>Play</span>
+        </button>
+        <button
+            class="toggle-btn"
+            class:active={viewMode === 'lab'}
+            on:click={() => viewMode = 'lab'}
+        >
+            <FlaskConical size={16} />
+            <span>Lab</span>
+        </button>
+    </div>
 
-    <main class="main-content">
-        <div class="left-column">
-            {#if !$romLoaded}
-                <RomDropzone />
-            {:else}
-                <GameCanvas />
-            {/if}
+    {#if viewMode === 'lab'}
+        <!-- Lab Mode -->
+        <main class="lab-content">
+            <LabView />
+        </main>
+    {:else}
+        <!-- Play Mode -->
+        <LLMConfig />
 
-            <ProgressBar />
+        <main class="main-content">
+            <div class="left-column">
+                {#if !$romLoaded}
+                    <RomDropzone />
+                {:else}
+                    <GameCanvas />
+                {/if}
 
-            {#if $romLoaded}
-                <GameControls />
-                <HintInput />
-            {/if}
-        </div>
+                <ProgressBar />
 
-        <div class="right-column">
-            {#if $romLoaded}
-                <ModeSelector />
-                <ModelStatus />
-                <GameStateBar />
-                <AIPanel />
-            {/if}
+                {#if $romLoaded}
+                    <GameControls />
+                    <HintInput />
+                {/if}
+            </div>
 
-            <ActivityFeed />
-        </div>
-    </main>
+            <div class="right-column">
+                {#if $romLoaded}
+                    <ModeSelector />
+                    <ModelStatus />
+                    <GameStateBar />
+                    <AIPanel />
+                {/if}
 
-    <AdvancedPanel />
+                <ActivityFeed />
+            </div>
+        </main>
+
+        <AdvancedPanel />
+    {/if}
 
     <footer class="info-footer">
         <Info size={14} />
@@ -95,6 +127,45 @@
         margin: 0 auto;
         padding: 16px 12px;
         min-height: 100vh;
+    }
+
+    .view-toggle {
+        display: flex;
+        gap: 4px;
+        padding: 4px;
+        background: var(--bg-card);
+        border-radius: 8px;
+        width: fit-content;
+        margin: 16px auto 0;
+    }
+
+    .toggle-btn {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 8px 16px;
+        background: transparent;
+        border: none;
+        border-radius: 6px;
+        color: var(--text-muted);
+        font-size: 13px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.15s;
+    }
+
+    .toggle-btn:hover {
+        color: var(--text-secondary);
+    }
+
+    .toggle-btn.active {
+        background: var(--accent-primary);
+        color: white;
+    }
+
+    .lab-content {
+        margin-top: 16px;
+        min-height: 600px;
     }
 
     .main-content {

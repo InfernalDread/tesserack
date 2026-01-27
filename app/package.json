@@ -17,6 +17,8 @@
   },
   "dependencies": {
     "@mlc-ai/web-llm": "^0.2.0",
+    "cytoscape": "^3.33.1",
+    "cytoscape-dagre": "^2.5.0",
     "lucide-svelte": "^0.469.0"
   }
 }
