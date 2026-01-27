@@ -468,13 +468,21 @@
         padding: 8px 12px;
         background: var(--bg-panel);
         border-radius: 8px;
-        gap: 12px;
+        gap: 8px;
+        flex-wrap: wrap;
+        position: relative;
+        z-index: 10;
     }
 
     .header-left, .header-right {
         display: flex;
         align-items: center;
-        gap: 8px;
+        gap: 6px;
+        flex-shrink: 0;
+    }
+
+    .header-left {
+        flex-wrap: wrap;
     }
 
     .header-btn {
@@ -507,9 +515,36 @@
     }
 
     .header-btn.speed {
-        padding: 8px 12px;
+        padding: 6px 10px;
         font-size: 11px;
         font-weight: 600;
+    }
+
+    /* Responsive header */
+    @media (max-width: 800px) {
+        .lab-header {
+            padding: 6px 8px;
+        }
+
+        .header-left, .header-right {
+            gap: 4px;
+        }
+
+        .header-btn {
+            padding: 6px;
+        }
+
+        .run-btn {
+            padding: 6px 10px;
+        }
+
+        .run-btn span {
+            display: none;
+        }
+
+        .header-divider {
+            display: none;
+        }
     }
 
     .header-divider {
@@ -521,12 +556,13 @@
     .run-btn {
         display: flex;
         align-items: center;
-        gap: 6px;
-        padding: 8px 16px;
+        gap: 4px;
+        padding: 8px 12px;
         border: none;
         border-radius: 6px;
         background: var(--accent-primary);
         color: white;
+        flex-shrink: 0;
         font-size: 13px;
         font-weight: 600;
         cursor: pointer;
