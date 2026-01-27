@@ -395,9 +395,9 @@ async function runPureRLLoop() {
         console.error('[Lab] Pure RL step error:', err);
     }
 
-    // Continue loop with speed adjustment (faster for pure RL)
+    // Continue loop with speed adjustment
     if (labPureRLAgent.running) {
-        const interval = Math.max(1, 50 / labSpeed); // Faster base speed for RL
+        const interval = Math.max(16, 200 / labSpeed); // ~5 steps/sec at 1x, comfortable to watch
         setTimeout(runPureRLLoop, interval);
     }
 }

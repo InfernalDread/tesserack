@@ -54,7 +54,7 @@
 
     // Playback controls
     let playbackSpeed = 1;
-    const speeds = [1, 2, 4, 8];
+    const speeds = [0.5, 1, 2, 4, 8];
 
     // Save states
     let savedStates = [];
