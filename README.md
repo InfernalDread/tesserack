@@ -16,14 +16,14 @@ Tesserack is a test bed for training small LLMs to play Pokemon Red. It uses a h
 | **Setup** | Zero (just open it) | Python environment |
 | **LLM** | WebLLM (1-3B) or API | Any (local or API) |
 | **Speed** | Real-time | 10x+ (headless) |
-| **Location** | `svelte-app/` | `lab/` |
+| **Location** | `app/` | `lab/` |
 
 ## Browser Version
 
 Zero-setup demo running entirely client-side via WebGPU.
 
 ```bash
-cd svelte-app
+cd app
 npm install
 npm run dev
 ```

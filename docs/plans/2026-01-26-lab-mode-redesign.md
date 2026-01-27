@@ -143,7 +143,7 @@ npm install cytoscape cytoscape-dagre
 
 ### File Structure
 ```
-tesserack/src/lib/           # renamed from svelte-app
+app/src/lib/
 ├── components/
 │   └── lab/
 │       ├── LabView.svelte

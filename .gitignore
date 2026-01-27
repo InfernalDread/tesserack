@@ -13,7 +13,7 @@ ClaudePlaysPokemonStarter/
 .DS_Store
 
 # SvelteKit
-svelte-app/.svelte-kit
-svelte-app/build
-svelte-app/node_modules
+app/.svelte-kit
+app/build
+app/node_modules
 node_modules
