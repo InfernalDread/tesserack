@@ -1,7 +1,7 @@
 <script>
     import { onMount, onDestroy } from 'svelte';
     import { get } from 'svelte/store';
-    import { Play, Pause, RotateCcw, Save, FolderOpen, FastForward, SkipForward, ChevronDown, Download, Check, Loader } from 'lucide-svelte';
+    import { Play, Pause, RotateCcw, Save, FolderOpen, FastForward, SkipForward, ChevronDown, Download, Upload, Check, Loader } from 'lucide-svelte';
     import LabCanvas from './LabCanvas.svelte';
     import ModeToggle from './ModeToggle.svelte';
     import HyperparamsPopover from './HyperparamsPopover.svelte';
@@ -32,6 +32,7 @@
         pureRLMetrics,
         updateRLConfig
     } from '$lib/core/lab/lab-init.js';
+    import { exportAllData, importAllData, getLabSaveStates, setLabSaveStates } from '$lib/core/persistence.js';
     import { feedSystem } from '$lib/stores/feed';
     import { llmState, PROVIDERS, setModel, setLLMProgress, setLLMReady, setLLMError } from '$lib/stores/llm';
     import { initBrowserLLM } from '$lib/core/llm.js';
@@ -292,6 +293,58 @@
         localStorage.setItem('tesserack_lab_states', JSON.stringify(savedStates));
     }
 
+    // Export all data (training data + save states)
+    async function handleExport() {
+        try {
+            feedSystem('Exporting data...');
+            const data = await exportAllData();
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `tesserack-backup-${new Date().toISOString().slice(0, 10)}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            feedSystem(`Exported ${data.labSaveStates?.length || 0} save states + training data`);
+        } catch (err) {
+            feedSystem(`Export failed: ${err.message}`);
+        }
+    }
+
+    // Import data from file
+    function handleImportClick() {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = '.json';
+        input.onchange = async (e) => {
+            const file = e.target.files?.[0];
+            if (!file) return;
+
+            try {
+                feedSystem('Importing data...');
+                const text = await file.text();
+                const data = JSON.parse(text);
+
+                if (!data.version) {
+                    feedSystem('Invalid backup file format');
+                    return;
+                }
+
+                await importAllData(data);
+
+                // Reload Lab save states into local variable
+                savedStates = getLabSaveStates();
+
+                feedSystem(`Imported ${data.labSaveStates?.length || 0} save states + training data`);
+            } catch (err) {
+                feedSystem(`Import failed: ${err.message}`);
+            }
+        };
+        input.click();
+    }
+
     function handleHyperparamsApply(event) {
         const { learningRate, rolloutSize, gamma } = event.detail;
         updateRLConfig({ learningRate, rolloutSize, gamma });
@@ -386,6 +439,13 @@
                     </div>
                 {/if}
             </div>
+
+            <button class="header-btn" on:click={handleExport} title="Export all data">
+                <Download size={16} />
+            </button>
+            <button class="header-btn" on:click={handleImportClick} title="Import data">
+                <Upload size={16} />
+            </button>
 
             <div class="header-divider"></div>
 

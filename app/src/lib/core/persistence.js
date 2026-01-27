@@ -410,6 +410,36 @@ export function loadMetadata() {
     };
 }
 
+// ============ LAB SAVE STATES ============
+
+const LAB_STATES_KEY = 'tesserack_lab_states';
+
+/**
+ * Get Lab save states from localStorage
+ */
+export function getLabSaveStates() {
+    try {
+        const stored = localStorage.getItem(LAB_STATES_KEY);
+        return stored ? JSON.parse(stored) : [];
+    } catch (e) {
+        console.warn('[Persistence] Failed to load lab states:', e);
+        return [];
+    }
+}
+
+/**
+ * Set Lab save states to localStorage
+ */
+export function setLabSaveStates(states) {
+    try {
+        localStorage.setItem(LAB_STATES_KEY, JSON.stringify(states));
+        return true;
+    } catch (e) {
+        console.error('[Persistence] Failed to save lab states:', e);
+        return false;
+    }
+}
+
 // ============ FULL EXPORT/IMPORT ============
 
 /**
@@ -424,8 +454,11 @@ export async function exportAllData() {
         loadLLMTests(),
     ]);
 
+    // Include Lab save states
+    const labSaveStates = getLabSaveStates();
+
     return {
-        version: 1,
+        version: 2,
         exportedAt: new Date().toISOString(),
         metadata: loadMetadata(),
         experiences,
@@ -433,6 +466,7 @@ export async function exportAllData() {
         checkpoints,
         rewardHistory,
         llmTests,
+        labSaveStates,
     };
 }
 
@@ -473,6 +507,11 @@ export async function importAllData(data) {
 
     if (data.metadata) {
         saveMetadata(data.metadata);
+    }
+
+    // Import Lab save states
+    if (data.labSaveStates?.length) {
+        setLabSaveStates(data.labSaveStates);
     }
 
     return true;
