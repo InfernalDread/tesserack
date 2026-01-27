@@ -1,20 +1,23 @@
 # Tesserack
 
-AI Plays Pokemon.
+Experimental reinforcement learning infrastructure for studying hierarchical task decomposition in game environments.
 
 [![Live Demo](https://img.shields.io/badge/demo-live-brightgreen)](https://sidmohan0.github.io/tesserack/)
 
+> **Lab Mode (Experimental)**
+> This repository contains experimental reinforcement learning infrastructure for studying credit assignment via deterministic reward specifications. Results are exploratory and configurations may change.
+
 ## Overview
 
-Tesserack is a test bed for training small LLMs to play Pokemon Red. It uses a hierarchical approach: an LLM handles strategic planning while a policy network learns tactical execution.
+Tesserack is a research test bed exploring hierarchical approaches to game-playing: a language model handles task decomposition while a policy network learns execution. The environment is Pokemon Red, chosen for its deterministic mechanics and well-documented memory layout.
 
-**Two ways to use Tesserack:**
+**Two interfaces:**
 
 | | Browser | Lab |
 |---|---------|-----|
-| **Purpose** | Demo & casual use | Serious experimentation |
+| **Purpose** | Interactive demo | Research experiments |
 | **Setup** | Zero (just open it) | Python environment |
-| **LLM** | WebLLM (1-3B) or API | Any (local or API) |
+| **Models** | WebLLM (1-3B) or API | Any (local or API) |
 | **Speed** | Real-time | 10x+ (headless) |
 | **Location** | `app/` | `lab/` |
 
@@ -31,13 +34,13 @@ npm run dev
 **Requirements:** Chrome/Edge 113+ (WebGPU), Pokemon Red ROM
 
 **Features:**
-- LLM via WebLLM or external APIs (OpenAI, Groq, local)
-- Live policy network training
-- Full game state visibility
+- Language model via WebLLM or external APIs (OpenAI, Groq, local)
+- Policy network training visualization
+- Game state inspection
 
-## Lab (Python Test Bed)
+## Lab (Experimental)
 
-For running experiments, comparing models, and serious training.
+For running experiments, comparing configurations, and exploring training dynamics.
 
 ```bash
 cd lab
@@ -49,9 +52,9 @@ python scripts/run_experiment.py --rom pokemon_red.gb
 
 **Features:**
 - Headless execution at 10x+ speed
-- Swappable LLM backends
-- Full experiment logging and metrics
-- Configurable everything
+- Swappable model backends
+- Experiment logging and metrics
+- Configurable reward specifications
 
 See [lab/README.md](lab/README.md) for details.
 
@@ -81,10 +84,11 @@ See [lab/README.md](lab/README.md) for details.
 
 **The Harness:** Manages game state, detects task completion, logs everything
 
-## Current Goal
+## Current Focus
 
-Get a small LLM (3B parameters) to beat the first 2 gyms with the right harness design.
+Exploring whether hierarchical task decomposition enables small models (3B parameters) to make meaningful progress through early-game milestones.
 
+**Milestones under study:**
 - [ ] Brock (Boulder Badge)
 - [ ] Misty (Cascade Badge)
 

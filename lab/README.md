@@ -1,12 +1,15 @@
 # Tesserack Lab
 
-Python test bed for training LLMs to play Pokemon Red.
+> **Experimental**
+> This module contains research infrastructure for exploring hierarchical reinforcement learning. Results are exploratory and configurations may change.
+
+Python test bed for studying hierarchical task decomposition in game environments.
 
 ## Overview
 
 This is the experimentation layer of Tesserack. It provides:
 
-- **Hierarchical learning**: LLM for strategic planning, policy network for tactical execution
+- **Hierarchical architecture**: Language model for task decomposition, policy network for execution
 - **Task-based abstraction**: LLM issues high-level tasks, harness handles completion detection
 - **Full experiment tracking**: Every task, checkpoint, and training step is logged
 - **Configurable everything**: Swap LLMs, tweak policy networks, adjust rewards
@@ -103,9 +106,9 @@ Each run creates in `runs/`:
 - `{run_id}_policy.npz` - Trained policy weights
 - `{run_id}_cp{N}.state` - Emulator save states
 
-## MVP Goal
+## Current Focus
 
-Get a small LLM (Llama 3.2 3B or similar) to beat the first 2 gyms:
+Exploring whether hierarchical decomposition enables small models (Llama 3.2 3B or similar) to make progress through early-game milestones:
 
 - [ ] Brock (Boulder Badge)
 - [ ] Misty (Cascade Badge)
