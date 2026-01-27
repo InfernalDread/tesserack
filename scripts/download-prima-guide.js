@@ -17,8 +17,8 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = path.join(__dirname, '..', 'data');
 const OUTPUT_PATH = path.join(DATA_DIR, 'prima-guide.pdf');
 
-// Archive.org PDF URL
-const PDF_URL = 'https://archive.org/download/prima1999pokemonredblue/prima1999pokemonredblue.pdf';
+// Archive.org PDF URL (filename has spaces and parentheses)
+const PDF_URL = 'https://archive.org/download/prima1999pokemonredblue/%28Prima%201999%29%20-%20Pokemon%20Red%20%26%20Blue.pdf';
 
 function downloadFile(url, dest) {
     return new Promise((resolve, reject) => {

@@ -137,12 +137,14 @@
         margin: 0 auto;
         padding: 12px 8px;
         min-height: 100vh;
+        display: flex;
+        flex-direction: column;
     }
 
     .lab-content {
         margin-top: 8px;
         min-height: 800px;
-        height: calc(100vh - 180px);
+        flex: 1;
     }
 
     .classic-link {
