@@ -332,41 +332,38 @@
             Tesserack runs <strong>entirely in your browser</strong>. No server, no API calls, no data leaves your machine. Two modes are available:
         </p>
 
-        <h3>LLM Mode</h3>
+        <h3>Play Mode (LLM-guided)</h3>
         <p>
-            Language model (WebLLM or external API) generates action plans based on game state and strategy guide context. Policy network selects and executes plans.
+            A language model (WebLLM or external API) generates action plans based on game state and strategy guide context. The agent follows the guide to make progress through the game.
         </p>
 
-        <h3>Pure RL Mode</h3>
+        <h3>Train Mode (Pure RL)</h3>
         <p>
-            Each step, the agent reads game memory to get the current state, encodes it as a 16-number vector, passes it through a small neural network to get action preferences, picks an action (mostly random at first, increasingly policy-driven over time), executes it for ~48 frames, then scores the resulting state change using deterministic tests. Movement scores +0.1, entering a new map scores +1-2, major milestones like badges score +5-10, and getting stuck incurs penalties.
+            The agent learns to play using <strong>REINFORCE</strong>, a vanilla policy gradient algorithm. Each step: read game memory → encode as 16-dimensional state vector → sample action from policy network → execute for ~48 frames → compute reward from deterministic tests. After collecting a rollout (128 steps by default), compute discounted returns and update policy weights via gradient ascent.
         </p>
 
-        <h3>Causal Chain</h3>
-        <table class="causal-table">
-            <tbody>
-                <tr>
-                    <td><strong>Immediate</strong></td>
-                    <td>pressButton() sets input bits in emulator memory-mapped I/O, held for 12 frames</td>
-                </tr>
-                <tr>
-                    <td><strong>Behavioral</strong></td>
-                    <td>Epsilon-greedy: 30% random (decaying to 5%), otherwise sample from softmax(policy(state))</td>
-                </tr>
-                <tr>
-                    <td><strong>Systemic</strong></td>
-                    <td>Currently: no learning. Rewards computed but policy weights never updated. Pure exploration with reward tracking.</td>
-                </tr>
-            </tbody>
-        </table>
+        <h3>Reward System</h3>
+        <ul>
+            <li><strong>T1 Movement:</strong> +0.1 for position changes (encourages exploration)</li>
+            <li><strong>T2 Map:</strong> +1-2 for entering new areas</li>
+            <li><strong>T3 Goals:</strong> +5-10 for badges, Pokemon caught, story progress</li>
+            <li><strong>Penalties:</strong> -0.02 per step when stuck in same position</li>
+        </ul>
+
+        <h3>Architecture</h3>
+        <p>
+            Two-layer MLP policy (16 → 64 → 6 actions) with softmax output. Pure on-policy learning with configurable hyperparameters: learning rate, rollout size, and discount factor (γ). All computation runs in JavaScript with typed arrays for efficiency.
+        </p>
 
         <h3>Roadmap</h3>
         <ul class="roadmap">
             <li class="done">Deterministic unit-test reward system</li>
             <li class="done">Browser-native Pure RL mode</li>
             <li class="done">Real-time reward breakdown UI</li>
-            <li class="todo">Policy gradient updates (REINFORCE)</li>
-            <li class="todo">Experience replay buffer</li>
+            <li class="done">REINFORCE policy gradient learning</li>
+            <li class="done">Configurable hyperparameters with presets</li>
+            <li class="done">Learning visualization (charts)</li>
+            <li class="todo">PPO (clipped objective, value baseline)</li>
             <li class="todo">Checkpoint-based curriculum shaping</li>
             <li class="todo">Reach Boulder Badge without LLM</li>
         </ul>
