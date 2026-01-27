@@ -44,9 +44,14 @@ export const pureRLMetrics = writable({
     action: null,
     reward: 0,
     totalReward: 0,
-    epsilon: 0.3,
     breakdown: { tier1: 0, tier2: 0, tier3: 0, penalties: 0 },
-    firedTests: []
+    firedTests: [],
+    // Training metrics (REINFORCE)
+    trainSteps: 0,
+    bufferFill: 0,
+    bufferSize: 128,
+    avgRawReturn: 0,
+    policyEntropy: 0,
 });
 
 /**
@@ -107,9 +112,14 @@ function handlePureRLStep(stepData) {
         action: stepData.action,
         reward: stepData.reward,
         totalReward: stepData.totalReward,
-        epsilon: stepData.epsilon,
         breakdown: stepData.breakdown,
-        firedTests: stepData.firedTests
+        firedTests: stepData.firedTests,
+        // Training metrics
+        trainSteps: stepData.trainSteps ?? 0,
+        bufferFill: stepData.bufferFill ?? 0,
+        bufferSize: stepData.bufferSize ?? 128,
+        avgRawReturn: stepData.avgRawReturn ?? 0,
+        policyEntropy: stepData.policyEntropy ?? 0,
     });
 
     // Update game state
@@ -185,14 +195,16 @@ export async function initializeLab(romBuffer, canvas) {
         labRewardSystem = new CombinedRewardSystem(canvas, labReader);
         labAgent.setExternalRewardSource(labRewardSystem);
 
-        // 6. Create pure RL agent
+        // 6. Create pure RL agent (REINFORCE - no epsilon, pure policy sampling)
         labPureRLAgent = new PureRLAgent(labEmulator, labReader, {
-            epsilonStart: 0.3,
-            epsilonEnd: 0.05,
-            epsilonDecay: 0.9995,
             actionHoldFrames: 12,
             frameSkip: 16,      // More frames per step = smoother movement
-            actionRepeat: 3     // Repeat action 3 times before reconsidering
+            actionRepeat: 3,    // Repeat action 3 times before reconsidering
+            // REINFORCE config
+            rolloutSize: 128,
+            learningRate: 0.01,  // Tuned for Pokemon (bandit used 0.1)
+            gamma: 0.99,
+            normalizeReturns: true,
         });
 
         // 7. Start emulator
@@ -304,15 +316,22 @@ async function runPureRLLoop() {
         const result = await labPureRLAgent.step();
         // Get current state for the callback
         const state = labReader?.getGameState();
+        // Get training metrics from agent
+        const metrics = labPureRLAgent.getMetrics();
         handlePureRLStep({
             step: labPureRLAgent.totalSteps,
-            action: result.action,
+            action: result.actionStr ?? result.action,
             reward: result.reward,
             totalReward: labPureRLAgent.totalReward,
-            epsilon: labPureRLAgent.epsilon,
             breakdown: result.breakdown,
-            firedTests: result.firedTests,
-            state
+            firedTests: result.firedTests ?? [],
+            state,
+            // Training metrics
+            trainSteps: metrics.trainSteps,
+            bufferFill: metrics.bufferFill,
+            bufferSize: metrics.bufferSize,
+            avgRawReturn: metrics.avgRawReturn,
+            policyEntropy: metrics.policyEntropy,
         });
     } catch (err) {
         console.error('[Lab] Pure RL step error:', err);
@@ -346,15 +365,20 @@ export async function stepLabAgent() {
         try {
             const result = await labPureRLAgent.step();
             const state = labReader?.getGameState();
+            const metrics = labPureRLAgent.getMetrics();
             handlePureRLStep({
                 step: labPureRLAgent.totalSteps,
-                action: result.action,
+                action: result.actionStr ?? result.action,
                 reward: result.reward,
                 totalReward: labPureRLAgent.totalReward,
-                epsilon: labPureRLAgent.epsilon,
                 breakdown: result.breakdown,
-                firedTests: result.firedTests,
-                state
+                firedTests: result.firedTests ?? [],
+                state,
+                trainSteps: metrics.trainSteps,
+                bufferFill: metrics.bufferFill,
+                bufferSize: metrics.bufferSize,
+                avgRawReturn: metrics.avgRawReturn,
+                policyEntropy: metrics.policyEntropy,
             });
             return true;
         } catch (err) {
@@ -403,9 +427,13 @@ export function resetLab() {
         action: null,
         reward: 0,
         totalReward: 0,
-        epsilon: 0.3,
         breakdown: { tier1: 0, tier2: 0, tier3: 0, penalties: 0 },
-        firedTests: []
+        firedTests: [],
+        trainSteps: 0,
+        bufferFill: 0,
+        bufferSize: 128,
+        avgRawReturn: 0,
+        policyEntropy: 0,
     });
 }
 

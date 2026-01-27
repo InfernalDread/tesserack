@@ -557,8 +557,27 @@ ACTIONS1: btn1, btn2, btn3, btn4, btn5, btn6, btn7, btn8, btn9, btn10
                         <span class="rl-value action">{$pureRLMetrics.action || '-'}</span>
                     </div>
                     <div class="rl-metric-row">
-                        <span class="rl-label">Epsilon</span>
-                        <span class="rl-value">{($pureRLMetrics.epsilon * 100).toFixed(1)}%</span>
+                        <span class="rl-label">Updates</span>
+                        <span class="rl-value">{$pureRLMetrics.trainSteps}</span>
+                    </div>
+                    <div class="rl-divider"></div>
+                    <!-- Buffer Progress -->
+                    <div class="rl-metric-row">
+                        <span class="rl-label">Buffer</span>
+                        <span class="rl-value">{$pureRLMetrics.bufferFill}/{$pureRLMetrics.bufferSize}</span>
+                    </div>
+                    <div class="buffer-bar">
+                        <div class="buffer-fill" style="width: {($pureRLMetrics.bufferFill / $pureRLMetrics.bufferSize) * 100}%"></div>
+                    </div>
+                    <div class="rl-divider"></div>
+                    <!-- Training Metrics -->
+                    <div class="rl-metric-row">
+                        <span class="rl-label">Avg Return</span>
+                        <span class="rl-value {rewardClass($pureRLMetrics.avgRawReturn)}">{$pureRLMetrics.avgRawReturn.toFixed(3)}</span>
+                    </div>
+                    <div class="rl-metric-row">
+                        <span class="rl-label">Entropy</span>
+                        <span class="rl-value">{$pureRLMetrics.policyEntropy.toFixed(3)}</span>
                     </div>
                     <div class="rl-divider"></div>
                     <div class="rl-metric-row">
@@ -1670,5 +1689,22 @@ ACTIONS1: btn1, btn2, btn3, btn4, btn5, btn6, btn7, btn8, btn9, btn10
         border-radius: 3px;
         font-size: 9px;
         font-weight: 500;
+    }
+
+    /* Buffer progress bar */
+    .buffer-bar {
+        width: 100%;
+        height: 4px;
+        background: var(--border-color);
+        border-radius: 2px;
+        overflow: hidden;
+        margin-top: 2px;
+    }
+
+    .buffer-fill {
+        height: 100%;
+        background: var(--accent-primary);
+        border-radius: 2px;
+        transition: width 0.1s ease-out;
     }
 </style>
